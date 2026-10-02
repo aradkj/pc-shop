@@ -218,9 +218,8 @@
 }
 
 .product-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.6rem;
+  display: grid; /* brand above category: every card has the same header height */
+  gap: 0.1rem;
   margin: 0;
   font-size: 0.75rem;
   font-weight: 700;

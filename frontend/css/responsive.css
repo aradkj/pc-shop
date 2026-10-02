@@ -1,0 +1,219 @@
+/* ==========================================================================
+   Arad Store - responsive rules.
+   Desktop (>= 1024px): 4-column product grid
+   Tablet  (640-1023px): 2 columns
+   Mobile  (< 640px):    1 column, hamburger navigation
+   ========================================================================== */
+
+/* ---------- Tablet and below ---------- */
+@media (max-width: 1023px) {
+  .product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero__inner {
+    grid-template-columns: 1fr;
+  }
+
+  .hero__art {
+    display: none;
+  }
+
+  .shop-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .filters {
+    position: static;
+  }
+
+  .cart-layout,
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cart-summary {
+    position: static;
+  }
+
+  .site-footer__inner {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .site-footer__inner > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- Mobile navigation ---------- */
+@media (max-width: 860px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .site-nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding: 1rem var(--gutter) 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow);
+  }
+
+  .site-nav:not(.is-open) {
+    display: none;
+  }
+
+  .site-nav__links,
+  .site-nav__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .site-nav__links a {
+    padding: 0.8rem 1rem;
+  }
+
+  .site-nav__actions {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .site-nav__actions .btn {
+    width: 100%;
+  }
+
+  .cart-link {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    padding: 0 1rem;
+  }
+
+  .cart-link::after {
+    content: "Cart";
+    font-weight: 600;
+  }
+
+  .cart-link__count {
+    position: static;
+    margin-left: auto;
+    order: 3;
+  }
+
+  .user-menu summary {
+    border-radius: var(--radius-sm);
+  }
+
+  .user-menu__list {
+    position: static;
+    margin-top: 0.4rem;
+    box-shadow: none;
+  }
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 639px) {
+  :root {
+    --gutter: 1rem;
+  }
+
+  .product-grid,
+  .stat-grid,
+  .feature-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .page {
+    padding-block: 1.25rem 3rem;
+  }
+
+  .product-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .hero__search {
+    flex-direction: column;
+  }
+
+  .site-footer__inner {
+    grid-template-columns: 1fr;
+  }
+
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .cart-item {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .cart-item__media {
+    width: 72px;
+    height: 72px;
+  }
+
+  .cart-item__qty,
+  .cart-item__total {
+    grid-column: 1 / -1;
+  }
+
+  .cart-item__qty {
+    justify-self: start;
+  }
+
+  .cart-item__total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .order-card summary {
+    grid-template-columns: 1fr auto;
+  }
+
+  .order-card summary::after {
+    grid-column: 3;
+  }
+
+  .details-list {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .details-list dd {
+    margin-bottom: 0.75rem;
+  }
+
+  .admin-toolbar .field {
+    min-width: 100%;
+  }
+
+  .admin-toolbar .btn {
+    width: 100%;
+  }
+
+  dialog.modal {
+    width: 100vw;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .toast-region {
+    right: 0.5rem;
+    left: 0.5rem;
+    bottom: 0.5rem;
+    width: auto;
+  }
+}

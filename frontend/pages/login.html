@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log in · Arad Store</title>
+  <meta name="description" content="Log in to your Arad Store account." />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0a0c11" />
+  <link rel="icon" href="../img/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/components.css" />
+  <link rel="stylesheet" href="../css/responsive.css" />
+  <script type="module" src="../js/main.js"></script>
+</head>
+<body data-page="login" data-root="../">
+  <header class="site-header" id="site-header"></header>
+  <main id="main" tabindex="-1">
+    <noscript>
+      <div class="container page"><div class="alert alert--error">Arad Store needs JavaScript to load products, your cart and your orders. Please enable it and reload the page.</div></div>
+    </noscript>
+
+    <div class="container auth">
+      <div class="auth__card">
+        <h1>Welcome back</h1>
+        <p>Log in to use your cart and see your orders.</p>
+        <form id="login-form">
+          <div data-form-alert role="alert" hidden></div>
+          <div class="field">
+            <label for="identifier">Email or username</label>
+            <input class="input" id="identifier" name="identifier" type="text" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input class="input" id="password" name="password" type="password" autocomplete="current-password" required />
+          </div>
+          <div class="field">
+            <label class="check"><input type="checkbox" name="remember" /> Remember me on this device</label>
+          </div>
+          <button class="btn btn--primary btn--block" type="submit">Log in</button>
+        </form>
+        <p class="auth__switch">New here? <a href="register.html">Create an account</a></p>
+      </div>
+    </div>
+  </main>
+  <footer class="site-footer" id="site-footer"></footer>
+</body>
+</html>

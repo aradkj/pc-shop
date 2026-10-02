@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Create an account · Arad Store</title>
+  <meta name="description" content="Create your Arad Store customer account." />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0a0c11" />
+  <link rel="icon" href="../img/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/components.css" />
+  <link rel="stylesheet" href="../css/responsive.css" />
+  <script type="module" src="../js/main.js"></script>
+</head>
+<body data-page="register" data-root="../">
+  <header class="site-header" id="site-header"></header>
+  <main id="main" tabindex="-1">
+    <noscript>
+      <div class="container page"><div class="alert alert--error">Arad Store needs JavaScript to load products, your cart and your orders. Please enable it and reload the page.</div></div>
+    </noscript>
+
+    <div class="container auth">
+      <div class="auth__card">
+        <h1>Create your account</h1>
+        <p>It takes a minute and lets you order and track your hardware.</p>
+        <form id="register-form">
+          <div data-form-alert role="alert" hidden></div>
+          <div class="field-row">
+            <div class="field">
+              <label for="first_name">First name</label>
+              <input class="input" id="first_name" name="first_name" type="text" autocomplete="given-name" required maxlength="100" />
+            </div>
+            <div class="field">
+              <label for="last_name">Last name</label>
+              <input class="input" id="last_name" name="last_name" type="text" autocomplete="family-name" required maxlength="100" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input class="input" id="email" name="email" type="email" autocomplete="email" required />
+          </div>
+          <div class="field">
+            <label for="username">Username</label>
+            <input class="input" id="username" name="username" type="text" autocomplete="username" required
+              minlength="3" maxlength="30" pattern="[A-Za-z0-9_.\-]+" aria-describedby="username-hint" />
+            <span class="field__hint" id="username-hint">3&ndash;30 characters: letters, numbers, dot, dash or underscore.</span>
+          </div>
+          <div class="field">
+            <label for="register-password">Password</label>
+            <input class="input" id="register-password" name="password" type="password" autocomplete="new-password" required
+              minlength="8" maxlength="72" aria-describedby="password-hint" />
+            <span class="field__hint" id="password-hint">At least 8 characters.</span>
+          </div>
+          <div class="field">
+            <label for="confirm_password">Confirm password</label>
+            <input class="input" id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required />
+          </div>
+          <button class="btn btn--primary btn--block" type="submit">Create account</button>
+        </form>
+        <p class="auth__switch">Already have an account? <a href="login.html">Log in</a></p>
+      </div>
+    </div>
+  </main>
+  <footer class="site-footer" id="site-footer"></footer>
+</body>
+</html>

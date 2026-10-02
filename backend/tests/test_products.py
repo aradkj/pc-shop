@@ -260,6 +260,15 @@ def test_admin_create_product_validation(client, category, admin_headers, overri
     assert response.status_code == 422
 
 
+def test_validation_messages_are_readable(client, category, admin_headers):
+    response = client.post(PRODUCTS_URL, json=new_product_payload(category, image_url="javascript:alert(1)"), headers=admin_headers)
+
+    assert response.status_code == 422
+    error = response.json()["detail"][0]
+    assert error["loc"] == ["body", "image_url"]
+    assert error["msg"] == "Image URL must be an http(s) link or a path starting with '/'"  # no "Value error, " prefix
+
+
 def test_admin_update_product(client, db, product, admin_headers):
     response = client.patch(
         f"{PRODUCTS_URL}/{product.id}", json={"price": 549.5, "stock": 3, "name": "RTX Example (Updated)"}, headers=admin_headers

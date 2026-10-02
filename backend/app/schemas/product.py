@@ -23,7 +23,7 @@ def _validate_image_url(value: str | None) -> str | None:
     if not value:
         return None
     if value.startswith("//") or not value.startswith(("http://", "https://", "/")):
-        raise ValueError("image_url must be an http(s) URL or a path starting with '/'")
+        raise ValueError("Image URL must be an http(s) link or a path starting with '/'")
     return value
 
 

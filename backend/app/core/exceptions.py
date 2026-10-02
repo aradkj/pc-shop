@@ -61,7 +61,11 @@ async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
 async def _validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     # Deliberately drop `input` and `ctx`: they can echo back sensitive values
     # such as a submitted password.
-    errors = [{"loc": list(err["loc"]), "msg": err["msg"], "type": err["type"]} for err in exc.errors()]
+    # Messages from our own validators arrive as "Value error, <text>": show just <text>.
+    errors = [
+        {"loc": list(err["loc"]), "msg": err["msg"].removeprefix("Value error, "), "type": err["type"]}
+        for err in exc.errors()
+    ]
     return JSONResponse(status_code=422, content={"detail": errors})
 
 

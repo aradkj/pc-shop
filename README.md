@@ -166,7 +166,7 @@ Open:
 Log in with the [development accounts](#default-development-account). Stop with `Ctrl+C`; `docker compose down` keeps your data, `docker compose down -v` deletes it.
 
 > **Port 5432 already in use** (a local PostgreSQL)? The database port is only published for convenience: run `POSTGRES_PORT=5433 docker compose up --build`, or set `POSTGRES_PORT=5433` in `.env`.
-> **`required variable POSTGRES_DB is missing a value: Copy .env.example to .env first`** means the `cp` step was skipped.
+> An error ending in **`is missing a value: Copy .env.example to .env first`** means the `cp` step was skipped.
 
 ### Option B — run it directly on your machine
 

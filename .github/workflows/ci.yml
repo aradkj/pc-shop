@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          # A throw-away database that only this job can reach: "trust" means there is no password to store.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # The suite refuses to run against any database whose name does not end in "_test".
+      TEST_DATABASE_URL: postgresql+psycopg://postgres@localhost:5432/arad_store_test
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Run the tests (the schema is built by the Alembic migrations)
+        working-directory: backend
+        run: pytest --cov=app --cov-report=term-missing
+
+  docker:
+    name: Docker build and smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Build the production image (no dev dependencies)
+        run: docker build --tag arad-store-backend:ci backend
+
+      - name: Create .env from the example
+        run: cp .env.example .env
+
+      - name: Build and start the whole stack
+        run: docker compose up -d --build --wait
+
+      - name: Seed the database
+        run: docker compose exec -T backend python -m app.seed
+
+      - name: Smoke test the API and the frontend
+        run: |
+          curl -fsS http://localhost:8000/health
+          curl -fsS http://localhost:8000/health/db
+          curl -fsS "http://localhost:8000/api/v1/products?limit=1" \
+            | python3 -c "import json, sys; data = json.load(sys.stdin); assert data['total'] >= 15, data"
+          curl -fsS http://localhost:5500/ | grep -q "Arad Store"
+          admin_password=$(grep '^SEED_ADMIN_PASSWORD=' .env | cut -d= -f2-)
+          token=$(curl -fsS -X POST http://localhost:8000/api/v1/auth/login \
+            --data-urlencode "username=admin@example.com" \
+            --data-urlencode "password=${admin_password}" \
+            | python3 -c "import json, sys; print(json.load(sys.stdin)['access_token'])")
+          curl -fsS -H "Authorization: Bearer ${token}" http://localhost:8000/api/v1/admin/stats
+
+      - name: Show container logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes

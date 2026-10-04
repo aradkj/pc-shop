@@ -24,6 +24,7 @@ class OrderRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    order_number: str
     status: OrderStatus
     total_price: Money
     created_at: datetime

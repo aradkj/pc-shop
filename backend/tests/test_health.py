@@ -71,7 +71,8 @@ def test_cors_preflight_allows_the_configured_origin(client):
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == ALLOWED_ORIGIN
-    assert "access-control-allow-credentials" not in response.headers  # tokens travel in a header, not cookies
+    assert response.headers["access-control-allow-credentials"] == "true"  # HttpOnly cookies require credentials
+
 
 
 def test_cors_rejects_other_origins(client):

@@ -54,6 +54,15 @@ class ConflictError(AppError):
     default_detail = "Conflict with the current state of the resource"
 
 
+class TooManyRequestsError(AppError):
+    status_code = 429
+    default_detail = "Too many requests. Please try again later."
+
+    def __init__(self, detail: str | None = None, retry_after: int = 60) -> None:
+        super().__init__(detail, headers={"Retry-After": str(retry_after)})
+        self.retry_after = retry_after
+
+
 async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
 

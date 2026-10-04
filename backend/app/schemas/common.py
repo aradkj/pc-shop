@@ -10,9 +10,17 @@ T = TypeVar("T")
 
 SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
-# Money is a `Decimal` everywhere (database, services, schemas) so arithmetic is
-# exact. Only the JSON representation is a plain number, e.g. 599.99.
-Money = Annotated[Decimal, PlainSerializer(float, return_type=float, when_used="json")]
+# Money is a `Decimal` everywhere (database, services, schemas) and serialized
+# to JSON as an exact 2-decimal string representation (e.g. "599.99") to prevent
+# binary floating-point inaccuracy.
+def serialize_money(v: Decimal | float | int | str) -> str:
+    if not isinstance(v, Decimal):
+        v = Decimal(str(v))
+    return f"{v:.2f}"
+
+
+Money = Annotated[Decimal, PlainSerializer(serialize_money, return_type=str, when_used="json")]
+
 
 # A price accepted from a client: non-negative, at most 2 decimals, matches Numeric(12, 2).
 PriceInput = Annotated[Decimal, Field(ge=0, le=Decimal("1000000"), max_digits=12, decimal_places=2)]

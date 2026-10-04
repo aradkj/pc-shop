@@ -6,12 +6,12 @@
  *   api.patch("/cart/items/5", { quantity: 3 })
  *   api.delete("/cart/items/5")
  *
- * It adds the Bearer token, turns every failure into an `ApiError` with a message that is
- * safe to show to the user, and reports 401s on authenticated requests to one handler.
+ * Uses HttpOnly cookies for authentication (credentials: "include"),
+ * includes double-submit CSRF protection on state-changing requests,
+ * and turns every failure into an `ApiError` with a user-friendly message.
  */
 
 import { API_BASE_URL } from "./config.js";
-import { getToken } from "./session.js";
 
 class ApiError extends Error {
   /**
@@ -46,6 +46,27 @@ export function onUnauthorized(handler) {
 }
 
 const humanize = (field) => field.charAt(0).toUpperCase() + field.slice(1).replaceAll("_", " ");
+
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+async function ensureCsrfToken() {
+  let token = getCookie("csrf_token");
+  if (!token) {
+    try {
+      const res = await fetch(new URL(API_BASE_URL + "/auth/csrf", window.location.href), {
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => null);
+      token = data?.csrf_token || getCookie("csrf_token");
+    } catch {
+      // ignore
+    }
+  }
+  return token;
+}
 
 function buildUrl(path, params) {
   const url = new URL(API_BASE_URL + path, window.location.href);
@@ -83,11 +104,27 @@ function describeFailure(status, data) {
   return { message: FALLBACK_MESSAGES[status] ?? `Request failed (HTTP ${status}).`, fieldErrors: {} };
 }
 
-async function request(method, path, { params, body, form = false } = {}) {
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(cb) {
+  refreshSubscribers.push(cb);
+}
+
+function onRefreshed(success) {
+  refreshSubscribers.forEach((cb) => cb(success));
+  refreshSubscribers = [];
+}
+
+async function request(method, path, { params, body, form = false, isRetry = false } = {}) {
+  const isStateChanging = ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
   const headers = { Accept: "application/json" };
-  const token = getToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+
+  if (isStateChanging) {
+    const csrfToken = await ensureCsrfToken();
+    if (csrfToken) {
+      headers["X-CSRF-Token"] = csrfToken;
+    }
   }
 
   let payload;
@@ -101,13 +138,54 @@ async function request(method, path, { params, body, form = false } = {}) {
 
   let response;
   try {
-    response = await fetch(buildUrl(path, params), { method, headers, body: payload });
+    response = await fetch(buildUrl(path, params), {
+      method,
+      headers,
+      body: payload,
+      credentials: "include",
+    });
   } catch {
     throw new ApiError(0, "Cannot reach the server. Check your connection and try again.");
   }
 
+  if (response.status === 401 && !isRetry && !path.startsWith("/auth/login") && !path.startsWith("/auth/refresh") && !path.startsWith("/auth/logout")) {
+    if (!isRefreshing) {
+      isRefreshing = true;
+      try {
+        const refreshCsrf = getCookie("csrf_token");
+        const refreshHeaders = { Accept: "application/json" };
+        if (refreshCsrf) refreshHeaders["X-CSRF-Token"] = refreshCsrf;
+        const res = await fetch(buildUrl("/auth/refresh"), {
+          method: "POST",
+          headers: refreshHeaders,
+          credentials: "include",
+        });
+        if (res.ok) {
+          isRefreshing = false;
+          onRefreshed(true);
+          return request(method, path, { params, body, form, isRetry: true });
+        }
+      } catch {
+        // refresh failed
+      }
+      isRefreshing = false;
+      onRefreshed(false);
+      if (unauthorizedHandler) unauthorizedHandler();
+    } else {
+      return new Promise((resolve, reject) => {
+        subscribeTokenRefresh((success) => {
+          if (success) {
+            resolve(request(method, path, { params, body, form, isRetry: true }));
+          } else {
+            reject(new ApiError(401, FALLBACK_MESSAGES[401]));
+          }
+        });
+      });
+    }
+  }
+
   if (response.status === 204) {
-    await response.text(); // empty, but reading it lets the browser finish the request (otherwise DevTools shows it as cancelled)
+    await response.text();
     return null;
   }
   const data = await response.json().catch(() => null);
@@ -116,8 +194,8 @@ async function request(method, path, { params, body, form = false } = {}) {
   }
 
   const { message, fieldErrors } = describeFailure(response.status, data);
-  if (response.status === 401 && token && unauthorizedHandler) {
-    unauthorizedHandler(); // the stored token is no longer valid
+  if (response.status === 401 && unauthorizedHandler && !isRefreshing) {
+    unauthorizedHandler();
   }
   throw new ApiError(response.status, message, fieldErrors);
 }

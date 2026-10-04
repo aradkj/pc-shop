@@ -18,7 +18,7 @@ def test_get_empty_cart(client, customer_headers):
     body = response.json()
     assert body["items"] == []
     assert body["total_items"] == 0
-    assert body["total_price"] == 0
+    assert body["total_price"] == "0.00"
     assert isinstance(body["id"], int)
 
 
@@ -37,13 +37,13 @@ def test_add_product_to_cart(client, product, customer_headers):
     assert item["quantity"] == 2
     assert item["product"]["id"] == product.id
     assert item["product"]["name"] == "RTX Example"
-    assert item["product"]["price"] == 599.99
-    assert item["subtotal"] == 1199.98
+    assert item["product"]["price"] == "599.99"
+    assert item["subtotal"] == "1199.98"
 
     cart = client.get(CART_URL, headers=customer_headers).json()
     assert len(cart["items"]) == 1
     assert cart["total_items"] == 2
-    assert cart["total_price"] == 1199.98
+    assert cart["total_price"] == "1199.98"
 
 
 def test_quantity_defaults_to_one(client, product, customer_headers):
@@ -69,8 +69,16 @@ def test_cart_totals_are_exact_decimals(client, make_product, customer_headers):
 
     cart = client.get(CART_URL, headers=customer_headers).json()
 
-    assert cart["total_price"] == 64.98  # 3 * 19.99 + 5.01 - no float drift
+    assert cart["total_price"] == "64.98"  # 3 * 19.99 + 5.01 - no float drift
     assert cart["total_items"] == 4
+
+    # Test 0.10 + 0.20 binary float trap in cart
+    tenth = make_product(price="0.10")
+    fifth = make_product(price="0.20")
+    add(client, customer_headers, tenth, quantity=1)
+    add(client, customer_headers, fifth, quantity=1)
+    cart2 = client.get(CART_URL, headers=customer_headers).json()
+    assert cart2["total_price"] == "65.28"  # 64.98 + 0.30, exact decimal string
 
 
 def test_cart_shows_the_current_product_price(client, product, customer_headers, admin_headers):
@@ -78,7 +86,7 @@ def test_cart_shows_the_current_product_price(client, product, customer_headers,
 
     client.patch(f"/api/v1/products/{product.id}", json={"price": 500}, headers=admin_headers)
 
-    assert client.get(CART_URL, headers=customer_headers).json()["total_price"] == 1000
+    assert client.get(CART_URL, headers=customer_headers).json()["total_price"] == "1000.00"
 
 
 def test_add_unknown_product(client, customer_headers):
@@ -132,7 +140,7 @@ def test_update_cart_item(client, product, customer_headers):
 
     assert response.status_code == 200
     assert response.json()["quantity"] == 4
-    assert response.json()["subtotal"] == 2399.96
+    assert response.json()["subtotal"] == "2399.96"
     assert client.get(CART_URL, headers=customer_headers).json()["total_items"] == 4
 
 

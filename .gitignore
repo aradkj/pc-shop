@@ -28,5 +28,9 @@ Thumbs.db
 # Logs
 *.log
 
-# Node (only used for optional tooling)
+# Node / Playwright
 node_modules/
+playwright-report/
+test-results/
+.sudo_as_admin_successful
+test_pgdata/

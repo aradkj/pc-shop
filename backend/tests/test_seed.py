@@ -44,8 +44,10 @@ def test_seeded_accounts_can_log_in_with_the_configured_passwords(seed_passwords
     wrong = client.post("/api/v1/auth/login", data={"username": "alice", "password": ADMIN_PASSWORD})
 
     assert (admin.status_code, alice.status_code, wrong.status_code) == (200, 200, 401)
-    token = admin.json()["access_token"]
+    assert "access_token" not in admin.json()
+    token = admin.cookies["access_token"]
     assert client.get("/api/v1/admin/stats", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    assert client.get("/api/v1/admin/stats", cookies={"access_token": token}).status_code == 200
 
 
 def test_seeded_orders_are_consistent(seed_passwords, db):
@@ -72,6 +74,117 @@ def test_seed_is_idempotent(seed_passwords, db):
     db.expire_all()
     assert {model: count(db, model) for model in snapshot} == snapshot
     assert dict(db.execute(select(Product.slug, Product.stock)).all()) == stock
+
+
+def test_seed_partial_failure_recovery(seed_passwords, db):
+    # Run initial seed
+    assert seed.main() == 0
+
+    # Record stock after first seed
+    stock_after_first_seed = dict(db.execute(select(Product.slug, Product.stock)).all())
+
+    # Simulate partial failure:
+    # 1. Delete SEED-ORD-0002
+    ord2 = db.scalar(select(Order).where(Order.order_number == "SEED-ORD-0002"))
+    assert ord2 is not None
+    db.delete(ord2)
+    # 2. Reset SEED-ORD-0004 status back to PENDING instead of COMPLETED
+    ord4 = db.scalar(select(Order).where(Order.order_number == "SEED-ORD-0004"))
+    assert ord4 is not None
+    ord4.status = OrderStatus.PENDING
+    db.commit()
+
+    # Verify state is partial
+    assert count(db, Order) == 3
+    assert db.scalar(select(Order.status).where(Order.order_number == "SEED-ORD-0004")) == OrderStatus.PENDING
+
+    # Run seed again to repair
+    assert seed.main() == 0
+
+    # Verify all expected seed orders exist and are repaired
+    db.expire_all()
+    assert count(db, Order) == 4
+    ord2_repaired = db.scalar(select(Order).where(Order.order_number == "SEED-ORD-0002"))
+    assert ord2_repaired is not None
+    assert ord2_repaired.status == OrderStatus.PENDING
+    ord4_repaired = db.scalar(select(Order).where(Order.order_number == "SEED-ORD-0004"))
+    assert ord4_repaired is not None
+    assert ord4_repaired.status == OrderStatus.PROCESSING
+
+    # No duplicate orders or order numbers
+    order_numbers = db.scalars(select(Order.order_number)).all()
+    assert len(order_numbers) == len(set(order_numbers)) == 4
+
+    # Inventory must be the same as after the first seed (no double-decrement)
+    stock_after_repair = dict(db.execute(select(Product.slug, Product.stock)).all())
+    assert stock_after_repair == stock_after_first_seed
+
+
+def test_seed_partial_failure_does_not_double_decrement_inventory(seed_passwords, db):
+    """The critical scenario: delete a seed order and re-seed. Inventory must not be
+    decremented a second time for the recreated order.
+    1. Record initial catalog stock.
+    2. Run seed.
+    3. Record stock after seed.
+    4. Simulate realistic partial failure by deleting a seed order record.
+    5. Re-run seed to repair.
+    6. Check inventory was not incorrectly decremented again.
+    7. Verify total seed orders count.
+    8. Verify total order items count.
+    9. Verify final stock amounts.
+    Also verify repeated runs (seed(), seed(), seed()) are strictly deterministic.
+    """
+    # 1. Record initial catalog stock
+    initial_stock_table = {row[0]: row[5] for row in seed.PRODUCTS}
+
+    # 2. Run seed
+    assert seed.main() == 0
+
+    # 3. Record stock after seed
+    stock_after_seed = dict(db.execute(select(Product.slug, Product.stock)).all())
+    initial_order_count = count(db, Order)
+    initial_item_count = count(db, OrderItem)
+    assert initial_order_count == len(seed.SAMPLE_ORDERS)
+
+    # 4. Simulate realistic partial failure by deleting a seed order record
+    ord1 = db.scalar(select(Order).where(Order.order_number == "SEED-ORD-0001"))
+    assert ord1 is not None
+    db.delete(ord1)
+    db.commit()
+    assert count(db, Order) == initial_order_count - 1
+
+    # 5. Re-run seed to repair
+    assert seed.main() == 0
+    db.expire_all()
+
+    # 6. Check inventory was not double-decremented
+    stock_after_repair = dict(db.execute(select(Product.slug, Product.stock)).all())
+    assert stock_after_repair == stock_after_seed, (
+        "Inventory was double-decremented after partial failure repair!"
+    )
+
+    # 7. Check total seed orders count
+    assert count(db, Order) == initial_order_count
+    ord1_repaired = db.scalar(select(Order).where(Order.order_number == "SEED-ORD-0001"))
+    assert ord1_repaired is not None
+
+    # 8. Check total order items count
+    assert count(db, OrderItem) == initial_item_count
+
+    # 9. Verify final stock amounts against initial catalog stock minus expected demand
+    for slug, initial_st in initial_stock_table.items():
+        ordered_qty = sum(
+            qty for _, lines, _ in seed.SAMPLE_ORDERS for s, qty in lines if s == slug
+        )
+        assert stock_after_repair[slug] == initial_st - ordered_qty
+
+    # Repeated execution: seed(), seed(), seed() must stay strictly deterministic
+    for _ in range(3):
+        assert seed.main() == 0
+    db.expire_all()
+    assert count(db, Order) == initial_order_count
+    assert count(db, OrderItem) == initial_item_count
+    assert dict(db.execute(select(Product.slug, Product.stock)).all()) == stock_after_seed
 
 
 def test_seed_refuses_to_run_without_passwords(env, db):

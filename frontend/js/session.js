@@ -1,50 +1,44 @@
 /**
- * Where the login session lives in the browser.
- *
- * "Remember me" ticked  -> localStorage   (survives closing the browser)
- * "Remember me" cleared -> sessionStorage (ends with the tab)
- *
- * The JWT is the only credential kept. A copy of the user's public profile is cached next to it
- * purely so the navbar can render instantly; the server stays the source of truth (every page
- * that needs the user re-reads GET /auth/me).
+ * Where non-sensitive session data (like cached user profile for UI) lives in the browser.
+ * Authentication tokens (access_token, refresh_token) are HttpOnly cookies handled by the browser,
+ * NEVER stored in localStorage or sessionStorage.
  */
 
-const TOKEN_KEY = "arad.token";
 const USER_KEY = "arad.user";
 const FLASH_KEY = "arad.flash";
 
 const stores = () => [window.localStorage, window.sessionStorage];
 
-function activeStore() {
-  return stores().find((store) => store.getItem(TOKEN_KEY)) ?? null;
-}
-
-export function getToken() {
-  return activeStore()?.getItem(TOKEN_KEY) ?? null;
-}
-
-export function saveSession(token, remember) {
-  clearSession();
-  (remember ? window.localStorage : window.sessionStorage).setItem(TOKEN_KEY, token);
+export function isLoggedIn() {
+  return Boolean(getStoredUser());
 }
 
 export function getStoredUser() {
-  const raw = activeStore()?.getItem(USER_KEY);
-  try {
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
+  for (const store of stores()) {
+    const raw = store.getItem(USER_KEY);
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        // invalid JSON
+      }
+    }
   }
+  return null;
 }
 
-export function setStoredUser(user) {
-  activeStore()?.setItem(USER_KEY, JSON.stringify(user));
+export function setStoredUser(user, remember = false) {
+  clearSession();
+  if (user) {
+    const store = remember ? window.localStorage : window.sessionStorage;
+    store.setItem(USER_KEY, JSON.stringify(user));
+  }
 }
 
 export function clearSession() {
   for (const store of stores()) {
-    store.removeItem(TOKEN_KEY);
     store.removeItem(USER_KEY);
+    store.removeItem("arad.token"); // ensure legacy key is wiped
   }
 }
 

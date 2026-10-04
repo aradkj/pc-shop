@@ -1,0 +1,16 @@
+{
+  "name": "arad-store",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack e-commerce project Arad Store",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:a11y": "playwright test e2e/accessibility.spec.js",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
+    "@playwright/test": "^1.50.1"
+  }
+}

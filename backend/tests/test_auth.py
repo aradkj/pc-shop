@@ -134,11 +134,17 @@ def test_login_success(client, customer):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["token_type"] == "bearer"
+    assert body["authenticated"] is True
     assert body["expires_in"] == 3600
+    assert "access_token" not in body
+    assert "refresh_token" not in body
+
+    # Token is delivered via HttpOnly cookie
+    access_token = response.cookies["access_token"]
+    assert access_token is not None
 
     settings = get_settings()
-    payload = jwt.decode(body["access_token"], settings.secret_key, algorithms=[settings.algorithm])
+    payload = jwt.decode(access_token, settings.secret_key, algorithms=[settings.algorithm])
     assert payload["sub"] == str(customer.id)
     assert payload["exp"] - payload["iat"] == 3600
 
@@ -190,7 +196,8 @@ def test_get_current_user(client, customer, customer_headers):
 
 
 def test_get_current_user_with_token_from_login(client, customer):
-    token = login(client, "customer@example.com", "Password123!").json()["access_token"]
+    login_res = login(client, "customer@example.com", "Password123!")
+    token = login_res.cookies["access_token"]
 
     response = client.get(ME_URL, headers={"Authorization": f"Bearer {token}"})
 

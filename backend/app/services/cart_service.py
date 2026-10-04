@@ -60,21 +60,34 @@ def _find_item(db: Session, cart: Cart, item_id: int) -> CartItem:
     item = db.scalars(
         select(CartItem)
         .where(CartItem.id == item_id, CartItem.cart_id == cart.id)
-        .options(joinedload(CartItem.product))
+        .options(selectinload(CartItem.product))
+        .with_for_update()
     ).one_or_none()
     if item is None:
         raise NotFoundError("Cart item not found")
     return item
 
 
+
 def add_item(db: Session, user: User, product_id: int, quantity: int) -> CartItem:
-    """Add a product to the cart; if it is already there, increase its quantity."""
-    product = db.get(Product, product_id)
+    """Add a product to the cart safely under transactional lock."""
+    cart = _get_cart_row(db, user.id, lock=True)
+
+    # Lock product row in consistent order (Cart -> Product)
+    product = db.scalars(
+        select(Product)
+        .where(Product.id == product_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one_or_none()
     if product is None or not product.is_active:
         raise NotFoundError("Product not found")
 
-    cart = _get_cart_row(db, user.id, lock=True)
-    item = db.scalar(select(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == product.id))
+    item = db.scalar(
+        select(CartItem)
+        .where(CartItem.cart_id == cart.id, CartItem.product_id == product.id)
+        .with_for_update()
+    )
 
     new_quantity = (item.quantity if item else 0) + quantity
     _ensure_purchasable(product, new_quantity)
@@ -85,19 +98,40 @@ def add_item(db: Session, user: User, product_id: int, quantity: int) -> CartIte
     else:
         item.quantity = new_quantity
     cart.updated_at = func.now()
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ConflictError("Could not add item to cart due to concurrent conflict") from None
+
     db.refresh(item)
     return item
 
 
 def update_item(db: Session, user: User, item_id: int, quantity: int) -> CartItem:
+    """Update item quantity in cart safely with lock on both cart and product."""
     cart = _get_cart_row(db, user.id, lock=True)
     item = _find_item(db, cart, item_id)
-    _ensure_purchasable(item.product, quantity)
+
+    # Lock the product to ensure stock and active status are fresh
+    product = db.scalars(
+        select(Product)
+        .where(Product.id == item.product_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+    if product is None or not product.is_active:
+        raise ConflictError(f"'{item.product.name}' is no longer available")
+    _ensure_purchasable(product, quantity)
 
     item.quantity = quantity
     cart.updated_at = func.now()
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ConflictError("Could not update item due to concurrent conflict") from None
+
     db.refresh(item)
     return item
 
@@ -107,11 +141,19 @@ def remove_item(db: Session, user: User, item_id: int) -> None:
     item = _find_item(db, cart, item_id)
     db.delete(item)
     cart.updated_at = func.now()
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ConflictError("Could not remove item due to concurrent conflict") from None
 
 
 def clear_cart(db: Session, user: User) -> None:
     cart = _get_cart_row(db, user.id, lock=True)
     db.execute(delete(CartItem).where(CartItem.cart_id == cart.id))
     cart.updated_at = func.now()
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ConflictError("Could not clear cart due to concurrent conflict") from None

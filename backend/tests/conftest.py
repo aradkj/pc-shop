@@ -38,6 +38,8 @@ def _resolve_test_database_url() -> str:
             url = url.set(database=f"{url.database}_test")
     if not (url.database or "").endswith("_test"):
         pytest.exit("Refusing to run: the test database name must end with '_test'", returncode=2)
+    if url.host == "localhost":
+        url = url.set(host="127.0.0.1")
     return url.render_as_string(hide_password=False)
 
 
@@ -274,3 +276,13 @@ def make_order(client: TestClient) -> Callable[..., dict]:
         return response.json()
 
     return _make
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    from app.core.rate_limit import limiter
+
+    limiter.clear()
+    yield
+    limiter.clear()
+

@@ -27,12 +27,32 @@
           <h2 class="panel__title" id="account-title">Account details</h2>
           <div id="profile-account"></div>
         </section>
+        <section class="panel" aria-labelledby="password-title">
+          <h2 class="panel__title" id="password-title">Change password</h2>
+          <form id="change-password-form" class="form" novalidate>
+            <div data-form-alert role="alert" hidden></div>
+            <div class="field">
+              <label for="current_password">Current password</label>
+              <input class="input" type="password" id="current_password" name="current_password" required />
+            </div>
+            <div class="field">
+              <label for="new_password">New password</label>
+              <input class="input" type="password" id="new_password" name="new_password" required minlength="8" />
+            </div>
+            <div class="field">
+              <label for="confirm_new_password">Confirm new password</label>
+              <input class="input" type="password" id="confirm_new_password" name="confirm_new_password" required minlength="8" />
+            </div>
+            <button type="submit" class="btn btn--primary">Update password</button>
+          </form>
+        </section>
         <section class="panel" aria-labelledby="recent-title">
           <h2 class="panel__title" id="recent-title">Recent orders</h2>
           <div id="profile-orders"></div>
         </section>
       </div>
     </div>
+
   </main>
   <footer class="site-footer" id="site-footer"></footer>
 </body>

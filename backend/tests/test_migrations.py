@@ -5,7 +5,18 @@ from sqlalchemy import inspect
 
 from app.core.database import Base, engine
 
-EXPECTED_TABLES = {"users", "categories", "products", "carts", "cart_items", "orders", "order_items"}
+EXPECTED_TABLES = {
+    "users",
+    "categories",
+    "products",
+    "carts",
+    "cart_items",
+    "orders",
+    "order_items",
+    "refresh_tokens",
+    "password_reset_tokens",
+    "audit_logs",
+}
 
 
 def test_migrated_schema_matches_the_models():

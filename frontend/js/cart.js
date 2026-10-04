@@ -92,11 +92,12 @@ function cartItemRow(item) {
   const stock = stockInfo(product);
   return html`
     <li class="cart-item" data-item-id="${item.id}">
-      <a class="cart-item__media" href="${siteUrl("pages/product.html")}?id=${product.id}" tabindex="-1" aria-hidden="true">
+      <a class="cart-item__media" href="${siteUrl("pages/product.html")}?slug=${product.slug || product.id}" tabindex="-1" aria-hidden="true">
         <img src="${imageUrl(product.image_url)}" alt="${product.name}" loading="lazy" />
       </a>
       <div>
-        <h2 class="cart-item__title"><a href="${siteUrl("pages/product.html")}?id=${product.id}">${product.name}</a></h2>
+        <h2 class="cart-item__title"><a href="${siteUrl("pages/product.html")}?slug=${product.slug || product.id}">${product.name}</a></h2>
+
         <p class="cart-item__unit">${formatPrice(product.price)} each \u00b7 <span class="stock ${stock.className}">${stock.label}</span></p>
         ${problem ? html`<p class="cart-item__warning" role="alert">${problem}</p>` : ""}
       </div>

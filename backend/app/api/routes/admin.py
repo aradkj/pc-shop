@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, Query
 from app.api.deps import AdminUser, DbSession, require_admin
 from app.api.responses import ADMIN_RESPONSES, CONFLICT, NOT_FOUND
 from app.models.order import OrderStatus
-from app.schemas.admin import AdminStats, UserActiveUpdate
+from app.schemas.admin import AdminStats, AuditLogRead, UserActiveUpdate
 from app.schemas.common import Page, build_page
 from app.schemas.order import AdminOrderRead, OrderStatusUpdate
 from app.schemas.product import ProductFilters, ProductRead
 from app.schemas.user import UserRead
-from app.services import admin_service, order_service, product_service
+from app.services import admin_service, audit_service, order_service, product_service
 
 # `require_admin` protects every route of this router.
 router = APIRouter(
@@ -26,6 +26,18 @@ def get_stats(db: DbSession):
     return admin_service.get_stats(db)
 
 
+@router.get("/audit-logs", response_model=Page[AuditLogRead], summary="List audit logs")
+def list_audit_logs(
+    db: DbSession,
+    action: Annotated[str | None, Query(description="Filter by action")] = None,
+    entity_type: Annotated[str | None, Query(description="Filter by entity type")] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+):
+    items, total = audit_service.list_audit_logs(db, action=action, entity_type=entity_type, page=page, limit=limit)
+    return build_page(items, total, page, limit)
+
+
 @router.get("/products", response_model=Page[ProductRead], summary="List all products, including inactive ones")
 def list_all_products(filters: Annotated[ProductFilters, Query()], db: DbSession):
     items, total = product_service.list_products(db, filters, include_inactive=True)
@@ -36,10 +48,11 @@ def list_all_products(filters: Annotated[ProductFilters, Query()], db: DbSession
 def list_all_orders(
     db: DbSession,
     status: Annotated[OrderStatus | None, Query(description="Only orders with this status")] = None,
+    search: Annotated[str | None, Query(max_length=100, description="Match order number or user email/name")] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ):
-    items, total = order_service.list_all_orders(db, status=status, page=page, limit=limit)
+    items, total = order_service.list_all_orders(db, status=status, search=search, page=page, limit=limit)
     return build_page(items, total, page, limit)
 
 
@@ -48,13 +61,17 @@ def list_all_orders(
     response_model=AdminOrderRead,
     summary="Change an order's status",
     description=(
-        "Any status can be set, except that a cancelled order is final and a completed order cannot be "
-        "cancelled. Cancelling an order returns its items to stock."
+        "Update an order status according to the allowed order state transitions. "
+        "Allowed transitions: pending → processing | cancelled, "
+        "processing → shipped | cancelled, shipped → completed. "
+        "Completed and cancelled are terminal states. "
+        "Cancelling an order returns its items to stock."
     ),
     responses={**NOT_FOUND, **CONFLICT},
 )
-def update_order_status(order_id: int, data: OrderStatusUpdate, db: DbSession):
-    return order_service.update_order_status(db, order_id, data.status)
+def update_order_status(order_id: int, data: OrderStatusUpdate, admin: AdminUser, db: DbSession):
+    return order_service.update_order_status(db, order_id, data.status, admin_user_id=admin.id)
+
 
 
 @router.get("/users", response_model=Page[UserRead], summary="List users")

@@ -8,6 +8,7 @@ from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.models.category import Category
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductFilters, ProductSort, ProductUpdate
+from app.services import audit_service
 from app.services.slugs import slugify, unique_slug
 
 logger = logging.getLogger(__name__)
@@ -74,8 +75,12 @@ def list_products(
     return list(db.scalars(stmt)), total
 
 
-def get_product(db: Session, product_id: int, *, include_inactive: bool = False) -> Product:
-    stmt = select(Product).where(Product.id == product_id).options(joinedload(Product.category))
+def get_product(db: Session, identifier: int | str, *, include_inactive: bool = False) -> Product:
+    stmt = select(Product).options(joinedload(Product.category))
+    if isinstance(identifier, int) or (isinstance(identifier, str) and identifier.isdigit()):
+        stmt = stmt.where(Product.id == int(identifier))
+    else:
+        stmt = stmt.where(Product.slug == str(identifier))
     if not include_inactive:
         stmt = stmt.where(Product.is_active.is_(True))
     product = db.scalars(stmt).one_or_none()
@@ -105,7 +110,7 @@ def _commit(db: Session) -> None:
         raise ConflictError("A product with this slug already exists") from None
 
 
-def create_product(db: Session, data: ProductCreate) -> Product:
+def create_product(db: Session, data: ProductCreate, admin_user_id: int | None = None) -> Product:
     _ensure_category_exists(db, data.category_id)
     if data.slug:
         _ensure_slug_available(db, data.slug)
@@ -115,13 +120,31 @@ def create_product(db: Session, data: ProductCreate) -> Product:
 
     product = Product(**data.model_dump(exclude={"slug"}), slug=slug)
     db.add(product)
-    _commit(db)
+    try:
+        db.flush()
+        if admin_user_id is not None:
+            audit_service.record_audit_log(
+                db,
+                admin_user_id=admin_user_id,
+                action="PRODUCT_CREATED",
+                entity_type="product",
+                entity_id=product.id,
+                new_value={"name": product.name, "slug": product.slug, "price": str(product.price)},
+            )
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ConflictError("A product with this slug already exists") from None
+
     db.refresh(product)
+
     logger.info("Product created: id=%s slug=%s", product.id, product.slug)
     return product
 
 
-def update_product(db: Session, product_id: int, data: ProductUpdate) -> Product:
+def update_product(
+    db: Session, product_id: int, data: ProductUpdate, admin_user_id: int | None = None
+) -> Product:
     product = get_product(db, product_id, include_inactive=True)
     changes = data.model_dump(exclude_unset=True)
 
@@ -130,15 +153,31 @@ def update_product(db: Session, product_id: int, data: ProductUpdate) -> Product
     if "slug" in changes:
         _ensure_slug_available(db, changes["slug"], exclude_id=product.id)
 
+    old_values = {}
     for field, value in changes.items():
+        old_val = getattr(product, field)
+        old_values[field] = str(old_val) if hasattr(old_val, "isoformat") or hasattr(old_val, "as_tuple") else old_val
         setattr(product, field, value)
+
+    if admin_user_id is not None:
+        audit_service.record_audit_log(
+            db,
+            admin_user_id=admin_user_id,
+            action="PRODUCT_UPDATED",
+            entity_type="product",
+            entity_id=product.id,
+            old_value=old_values,
+            new_value={k: str(v) if hasattr(v, "isoformat") or hasattr(v, "as_tuple") else v for k, v in changes.items()},
+        )
+
     _commit(db)
     db.refresh(product)
+
     logger.info("Product updated: id=%s fields=%s", product.id, sorted(changes))
     return product
 
 
-def delete_product(db: Session, product_id: int) -> None:
+def delete_product(db: Session, product_id: int, admin_user_id: int | None = None) -> None:
     """Permanently delete a product.
 
     Past orders keep their lines (name and price are snapshots) and carts drop
@@ -146,6 +185,19 @@ def delete_product(db: Session, product_id: int) -> None:
     the shop, set `is_active` to false instead.
     """
     product = get_product(db, product_id, include_inactive=True)
+    old_info = {"name": product.name, "slug": product.slug}
     db.delete(product)
+
+    if admin_user_id is not None:
+        audit_service.record_audit_log(
+            db,
+            admin_user_id=admin_user_id,
+            action="PRODUCT_DELETED",
+            entity_type="product",
+            entity_id=product_id,
+            old_value=old_info,
+        )
+
     db.commit()
+
     logger.info("Product deleted: id=%s", product_id)

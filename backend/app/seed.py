@@ -20,11 +20,13 @@ from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.logging_config import configure_logging
 from app.core.security import hash_password
+from app.models.audit_log import AuditLog
 from app.models.category import Category
 from app.models.order import Order, OrderStatus
+from app.models.order_item import OrderItem
 from app.models.product import Product
 from app.models.user import User, UserRole
-from app.services import cart_service, order_service
+from app.services import order_service
 
 logger = logging.getLogger("app.seed")
 
@@ -154,19 +156,136 @@ def seed_users(db: Session, admin_password: str, customer_password: str) -> dict
     return users
 
 
+def _advance_order_status(db: Session, order_id: int, target: OrderStatus) -> None:
+    order = db.get(Order, order_id)
+    if not order or order.status == target:
+        return
+    if order.status == OrderStatus.PENDING:
+        if target == OrderStatus.CANCELLED:
+            order_service.update_order_status(db, order_id, OrderStatus.CANCELLED)
+            return
+        order_service.update_order_status(db, order_id, OrderStatus.PROCESSING)
+        order = db.get(Order, order_id)
+    if order and order.status == OrderStatus.PROCESSING:
+        if target == OrderStatus.CANCELLED:
+            order_service.update_order_status(db, order_id, OrderStatus.CANCELLED)
+            return
+        if target in (OrderStatus.SHIPPED, OrderStatus.COMPLETED):
+            order_service.update_order_status(db, order_id, OrderStatus.SHIPPED)
+            order = db.get(Order, order_id)
+    if order and order.status == OrderStatus.SHIPPED:
+        if target == OrderStatus.COMPLETED:
+            order_service.update_order_status(db, order_id, OrderStatus.COMPLETED)
+
+
 def seed_orders(db: Session, users: dict[str, User], products: dict[str, Product]) -> None:
-    """Place sample orders through the real services (so stock and totals stay consistent)."""
-    already_have_orders = set(db.scalars(select(Order.user_id).distinct()))  # computed once, before seeding
-    for username, lines, final_status in SAMPLE_ORDERS:
-        user = users[username]
-        if user.id in already_have_orders:
+    """Create sample orders with deterministic identifiers.
+
+    This function is idempotent and partial-failure safe:
+    - Existing orders are left untouched (status and items repaired if needed).
+    - Missing orders are recreated with deterministic markers in AuditLog tracking
+      that inventory was deducted, preventing double-decrement of inventory.
+    - Each order + its items + inventory mutation + deterministic marker happen in one transaction.
+    """
+    for idx, (username, lines, final_status) in enumerate(SAMPLE_ORDERS, start=1):
+        order_num = f"SEED-ORD-{idx:04d}"
+
+        # Check whether inventory decrement was already recorded/applied for this deterministic seed order
+        marker = db.scalar(
+            select(AuditLog).where(
+                AuditLog.entity_type == "seed_order",
+                AuditLog.entity_id == order_num,
+                AuditLog.action == "seed_inventory_applied",
+            )
+        )
+        already_applied = marker is not None
+
+        existing_order = db.scalar(select(Order).where(Order.order_number == order_num))
+        if existing_order is not None:
+            # Repair any missing items if partial failure corrupted them
+            existing_product_ids = {item.product_id for item in existing_order.items}
+            items_repaired = False
+            for slug, quantity in lines:
+                product = products[slug]
+                if product.id not in existing_product_ids:
+                    subtotal = product.price * quantity
+                    existing_order.items.append(
+                        OrderItem(
+                            product_id=product.id,
+                            product_name=product.name,
+                            unit_price=product.price,
+                            quantity=quantity,
+                            subtotal=subtotal,
+                        )
+                    )
+                    items_repaired = True
+            if items_repaired:
+                existing_order.total_price = sum(item.subtotal for item in existing_order.items)
+            if existing_order.status != final_status:
+                _advance_order_status(db, existing_order.id, final_status)
+            if not already_applied:
+                db.add(
+                    AuditLog(
+                        entity_type="seed_order",
+                        entity_id=order_num,
+                        action="seed_inventory_applied",
+                        new_value={"order_number": order_num, "status": existing_order.status.value},
+                    )
+                )
+            db.commit()
             continue
-        for slug, quantity in lines:
-            cart_service.add_item(db, user, products[slug].id, quantity)
-        order = order_service.create_order(db, user)
-        if final_status != OrderStatus.PENDING:
-            order_service.update_order_status(db, order.id, final_status)
-        logger.info("Created sample order #%s for %s (%s)", order.id, username, final_status.value)
+
+        # Build the order directly within a single transaction
+        try:
+            user = users[username]
+            total = Decimal("0.00")
+            order_items: list[OrderItem] = []
+
+            for slug, quantity in lines:
+                product = products[slug]
+                subtotal = product.price * quantity
+                order_items.append(
+                    OrderItem(
+                        product_id=product.id,
+                        product_name=product.name,
+                        unit_price=product.price,
+                        quantity=quantity,
+                        subtotal=subtotal,
+                    )
+                )
+                # Only decrement inventory if this seed order's inventory change has not yet been applied
+                if not already_applied:
+                    if product.stock < quantity:
+                        raise ValueError(f"Insufficient stock to seed {product.name}")
+                    product.stock -= quantity
+
+                total += subtotal
+
+            order = Order(
+                user_id=user.id,
+                order_number=order_num,
+                status=OrderStatus.PENDING,
+                total_price=total,
+                items=order_items,
+            )
+            db.add(order)
+            if not already_applied:
+                db.add(
+                    AuditLog(
+                        entity_type="seed_order",
+                        entity_id=order_num,
+                        action="seed_inventory_applied",
+                        new_value={"order_number": order_num, "status": final_status.value},
+                    )
+                )
+            db.flush()
+            _advance_order_status(db, order.id, final_status)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        logger.info("Created sample order %s (#%s) for %s (%s)", order_num, order.id, username, final_status.value)
+
 
 
 def main() -> int:

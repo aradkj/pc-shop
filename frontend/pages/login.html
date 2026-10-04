@@ -39,9 +39,23 @@
           </div>
           <button class="btn btn--primary btn--block" type="submit">Log in</button>
         </form>
+        <p class="auth__switch"><a href="#forgot" id="toggle-forgot">Forgot your password?</a></p>
+        <div id="forgot-password-card" hidden class="auth__card auth__card--nested">
+          <h2>Reset password</h2>
+          <p class="muted">Enter your email and we'll send you a password reset process instructions.</p>
+          <form id="forgot-form">
+            <div data-forgot-alert role="alert" hidden></div>
+            <div class="field">
+              <label for="forgot-email">Email address</label>
+              <input class="input" id="forgot-email" name="email" type="email" autocomplete="email" required />
+            </div>
+            <button class="btn btn--secondary btn--block" type="submit">Send reset request</button>
+          </form>
+        </div>
         <p class="auth__switch">New here? <a href="register.html">Create an account</a></p>
       </div>
     </div>
+
   </main>
   <footer class="site-footer" id="site-footer"></footer>
 </body>

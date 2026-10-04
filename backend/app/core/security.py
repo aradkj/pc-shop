@@ -1,5 +1,7 @@
 """Password hashing (bcrypt) and JWT helpers."""
 
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
@@ -55,3 +57,13 @@ def decode_access_token(token: str) -> str:
         options={"require": ["exp", "sub"]},
     )
     return payload["sub"]
+
+
+def hash_token(token: str) -> str:
+    """Return a SHA-256 hash of a raw token for secure storage."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def generate_secure_token() -> str:
+    """Generate a cryptographically strong, URL-safe random token."""
+    return secrets.token_urlsafe(32)

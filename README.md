@@ -5,37 +5,45 @@ FastAPI + PostgreSQL on the back end, plain HTML / CSS / vanilla JavaScript on t
 
 | | |
 |---|---|
-| **Back end** | Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL 17, JWT + bcrypt |
+| **Back end** | Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL 17, JWT + bcrypt, HttpOnly cookies, CSRF protection, rate limiting |
 | **Front end** | HTML5, CSS3 (own design system with CSS variables), ES-module vanilla JS — no framework, no build step |
-| **Quality** | 215 pytest tests on a real PostgreSQL database (99 % coverage), GitHub Actions CI, axe-core accessibility audit with 0 violations |
+| **Quality** | 253 pytest tests on a real PostgreSQL database (97 % coverage), Playwright E2E suite (16 tests), axe-core accessibility audit with color-contrast enabled (0 violations), GitHub Actions CI |
 
 ---
 
 ## Table of contents
 
-[Features](#features) · [Tech stack](#tech-stack) · [Architecture](#architecture) · [Project structure](#project-structure) · [Screenshots](#screenshots) · [Getting started](#getting-started) · [Environment variables](#environment-variables) · [Docker setup](#docker-setup) · [Database migration](#database-migration) · [Seed data](#seed-data) · [Running tests](#running-tests) · [API documentation](#api-documentation) · [Default development account](#default-development-account) · [CI/CD](#cicd) · [Future improvements](#future-improvements)
+[Features](#features) · [Tech stack](#tech-stack) · [Architecture](#architecture) · [Order state machine](#order-state-machine) · [Project structure](#project-structure) · [Screenshots](#screenshots) · [Getting started](#getting-started) · [Environment variables](#environment-variables) · [Docker setup](#docker-setup) · [Database migration](#database-migration) · [Seed data](#seed-data) · [Running tests](#running-tests) · [API documentation](#api-documentation) · [Default development account](#default-development-account) · [CI/CD](#cicd)
 
 ---
 
 ## Features
 
 **Customers**
-- Browse the catalogue with **search, category and price filters, sorting and pagination** (state is kept in the URL, so filtered views can be shared).
+- Browse the catalogue with **search, category and price filters, sorting and pagination**; product pages support clean slug-based URLs (`?slug=...`) with fallback to ID.
 - Product detail pages with live stock levels ("In stock", "Only 3 left", "Out of stock").
-- Register / log in (with *Remember me*), a persistent **cart**, and **checkout** that turns the cart into an order.
-- Order history with the status of each order and the exact lines, names and prices that were bought.
+- Register / log in with secure **HttpOnly cookies**, session refresh, password change on profile, and forgot password reset flow.
+- Persistent **cart** with concurrency row-locking guards against stock races.
+- **Checkout** that converts the cart into an order with a unique order number (`ORD-YYYYMMDD-XXXX`).
+- Order history with the status of each order and the exact lines, names, prices and order numbers.
 
 **Admins**
 - Dashboard with stat cards and the latest orders.
 - Product CRUD (including hiding a product without deleting it), category CRUD, user list with enable/disable.
-- Order list with status filter, status changes (pending → processing → shipped → completed, or cancelled) and order details.
+- Order management with real-time **search** (by order number, customer email, username, or name), status transitions via strict state machine, and order details.
+- Comprehensive **audit logs** tracking administrative product changes, order status transitions, and user account status updates.
 
-**Engineering**
-- Prices are `Decimal` / `NUMERIC(12,2)` end to end — never floats.
-- **Order creation is one database transaction** with row locks: the server recomputes prices and totals, checks stock, decrements it and empties the cart. The client cannot send a price, a total or a user id. Two shoppers racing for the last unit, or a double-clicked *Place order*, cannot oversell or duplicate (covered by tests that make the overlap real).
-- Passwords are hashed with bcrypt; JWTs carry `sub` and `exp`; secrets come only from environment variables.
-- Uniform JSON errors with safe messages (no SQL, no stack traces, validation errors never echo the submitted value).
-- Frontend states for **Loading / Empty / Error / Success** on every data view; responsive grid (4 columns desktop, 2 tablet, 1 mobile) and a mobile menu; keyboard and screen-reader friendly.
+**Engineering & Security**
+- **Precise money representation**: Strict end-to-end pipeline: PostgreSQL (`NUMERIC(12, 2)`) → SQLAlchemy (`Decimal`) → Pydantic (`Decimal`) → JSON exact decimal strings (e.g. `{"price": "599.99"}`). Never serialized as JSON numbers, floats, or IEEE-754 approximations (e.g. `{"price": 599.99}` is rejected in favor of `"599.99"`).
+- **HttpOnly cookie authentication** with `SameSite=Lax` and `Secure` (in production). Login and token refresh endpoints issue tokens via cookies and return safe metadata only (`expires_in`, `authenticated`) without exposing raw JWTs in JSON bodies or frontend JavaScript storage (`localStorage`/`sessionStorage`).
+- **Refresh token rotation & revocation**: Refresh tokens are single-use and rotated on every `/auth/refresh` request; all tokens are revoked upon logout or password change.
+- **Double-submit CSRF protection**: `csrf_token` cookie paired with `X-CSRF-Token` header on state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`).
+- **IP rate limiting** on authentication endpoints (5 attempts per minute with sliding window, `Retry-After` headers, and automatic reset upon successful login).
+- **Security headers**: HSTS, Content-Security-Policy (CSP), X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy, and Permissions-Policy.
+- **Order state machine**: validated transitions (`pending` → `processing` → `shipped` → `completed`, or `cancelled` from `pending`/`processing`) returning HTTP 409 on invalid transitions. Restocks inventory upon cancellation.
+- **Cart concurrency row locking**: Strict lock ordering (`Cart` row lock via `SELECT ... FOR UPDATE`, followed by `Product`/`CartItem` lock) prevents race conditions and overselling.
+- **Idempotent and repairable seed data**: Deterministic record keys (`SEED-ORD-0001` through `SEED-ORD-0004`) and audit markers ensure transaction-safe repairs without double-decrementing inventory.
+- **Automated tests**: Playwright E2E suite and automated axe-core WCAG A/AA audits with `color-contrast` testing enabled (0 violations across all audited pages).
 
 ## Tech stack
 
@@ -64,10 +72,11 @@ Front end: **no dependencies at all** (no npm, no bundler). Infrastructure: Post
 flowchart TB
     subgraph Browser["Browser (static files, no build step)"]
         HTML["HTML pages"] --> JS["ES modules<br/>main · auth · products · cart · orders · admin"]
-        JS --> APIJS["api.js<br/>the only code that calls fetch()"]
+        JS --> APIJS["api.js<br/>fetch() with credentials & X-CSRF-Token"]
     end
-    APIJS -->|"JSON over HTTP<br/>Authorization: Bearer JWT"| Routes
+    APIJS -->|"JSON over HTTP<br/>HttpOnly Cookies / Bearer JWT"| Routes
     subgraph FastAPI["FastAPI backend"]
+        Middleware["SecurityHeadersMiddleware<br/>RateLimitMiddleware"] --> Routes
         Routes["api/routes<br/>HTTP, auth dependencies, response models"] --> Services["services<br/>business rules and transactions"]
         Services --> Models["models<br/>SQLAlchemy 2.x"]
         Schemas["schemas<br/>Pydantic v2"] -.-> Routes
@@ -77,15 +86,42 @@ flowchart TB
 ```
 
 - **Layers:** routes handle HTTP only; services hold the business rules and know nothing about HTTP (they raise domain errors that one handler turns into JSON); models map tables. This keeps every rule testable and in one place.
+- **Authentication & CSRF:** 
+  - Standard logins set `access_token` and `refresh_token` as `HttpOnly`, `SameSite=Lax` cookies, preventing JavaScript token exfiltration.
+  - A double-submit `csrf_token` cookie is matched against the `X-CSRF-Token` request header on mutating HTTP requests (`POST`, `PUT`, `PATCH`, `DELETE`).
+  - Dual-mode support: standalone API clients (e.g. mobile or tests) can alternatively supply `Authorization: Bearer <token>` without CSRF cookies.
 - **Order creation** (`services/order_service.py`), all inside one transaction:
   1. lock the user's cart row (`SELECT … FOR UPDATE`) — a double submit queues here and finds an empty cart;
   2. lock the products in id order — no deadlocks, no overselling;
   3. verify every line against the *current* product (active? enough stock?) → `409` otherwise;
-  4. snapshot `product_name` and `unit_price` into `order_items`, decrement stock, empty the cart, commit.
-- **Cancelling** an order (admin) puts the items back into stock; a cancelled order is final and a completed one cannot be cancelled.
+  4. generate unique human-readable `order_number` (`ORD-YYYYMMDD-XXXX`), snapshot `product_name` and `unit_price` into `order_items`, decrement stock, empty the cart, commit.
+- **Cancelling** an order (admin) puts the items back into stock; a cancelled or completed order cannot transition to another state.
 - **Deleting a product** is permanent. Past orders keep their lines (`order_items.product_id` becomes `NULL`, the name and price are snapshots). To merely hide a product, set `is_active` to `false`.
-- **CORS** origins come from `CORS_ORIGINS`; tokens travel in the `Authorization` header (no cookies), so there is no CSRF surface.
 - **Front end:** every page is a static HTML file with `<body data-page="…">`; `main.js` renders the shared navbar/footer and starts the page's controller. All data comes from the real API through `api.js`, and everything interpolated into markup goes through an escaping `html` template tag, so product names or descriptions can never inject HTML.
+
+## Order state machine
+
+Orders follow a strict, validated finite state machine. Invalid status transitions raise an `InvalidStateTransitionError` resulting in an HTTP `409 Conflict`.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> processing: Admin confirms
+    pending --> cancelled: Cancelled (restocks inventory)
+    processing --> shipped: Order dispatched
+    processing --> cancelled: Cancelled (restocks inventory)
+    shipped --> completed: Delivered to customer
+    completed --> [*]: Terminal state
+    cancelled --> [*]: Terminal state
+```
+
+| Current Status | Allowed Next Statuses | Notes |
+|---|---|---|
+| `pending` | `processing`, `cancelled` | Initial status on checkout |
+| `processing` | `shipped`, `cancelled` | Being prepared for dispatch |
+| `shipped` | `completed` | In transit to customer |
+| `completed` | *(none)* | Terminal state |
+| `cancelled` | *(none)* | Terminal state; restores reserved product stock back to inventory |
 
 ## Project structure
 
@@ -276,6 +312,9 @@ Other handy commands (from `backend/`): `alembic current`, `alembic downgrade -1
 erDiagram
     USERS ||--o| CARTS : "has one"
     USERS ||--o{ ORDERS : places
+    USERS ||--o{ REFRESH_TOKENS : has
+    USERS ||--o{ PASSWORD_RESET_TOKENS : requests
+    USERS ||--o{ AUDIT_LOGS : performs
     CATEGORIES ||--o{ PRODUCTS : contains
     CARTS ||--o{ CART_ITEMS : holds
     PRODUCTS ||--o{ CART_ITEMS : "appears in"
@@ -329,6 +368,7 @@ erDiagram
     }
     ORDERS {
         int id PK
+        string order_number UK
         int user_id FK
         numeric total_price "NUMERIC(12,2)"
         string status "pending, processing, shipped, completed, cancelled"
@@ -343,6 +383,32 @@ erDiagram
         numeric unit_price "snapshot"
         int quantity
         numeric subtotal
+    }
+    REFRESH_TOKENS {
+        int id PK
+        int user_id FK
+        string token_hash UK
+        timestamptz expires_at
+        bool revoked
+        timestamptz created_at
+    }
+    PASSWORD_RESET_TOKENS {
+        int id PK
+        int user_id FK
+        string token_hash UK
+        timestamptz expires_at
+        bool used
+        timestamptz created_at
+    }
+    AUDIT_LOGS {
+        int id PK
+        int user_id FK
+        string action
+        string entity_type
+        int entity_id
+        json details
+        string ip_address
+        timestamptz created_at
     }
 ```
 
@@ -364,9 +430,11 @@ docker compose exec backend python -m app.seed        # with Docker
 cd backend && python -m app.seed                       # without Docker
 ```
 
-Creates **1 admin, 3 customers, 5 categories** (Graphics Cards, Processors, Memory, Storage, Gaming Accessories), **20 products** (one sold out, one low on stock, one hidden) and **4 sample orders** in four different statuses. Sample orders are placed through the real order service, so stock and totals are consistent. The script is idempotent (running it again changes nothing), reads the passwords from `SEED_ADMIN_PASSWORD` / `SEED_CUSTOMER_PASSWORD`, and refuses to run when `APP_ENV=production`. Product images are local SVG illustrations under `frontend/img/products/`; the API itself only stores image URLs, so any hosting works.
+Creates **1 admin, 3 customers, 5 categories** (Graphics Cards, Processors, Memory, Storage, Gaming Accessories), **20 products** (one sold out, one low on stock, one hidden) and **4 sample orders** (`SEED-ORD-0001` through `SEED-ORD-0004`) in four different statuses (`pending`, `processing`, `shipped`, `completed`). Sample orders are created with deterministic order numbers and transitioned through the state machine. The script is idempotent (running it again changes nothing and retains existing orders), reads passwords from `SEED_ADMIN_PASSWORD` / `SEED_CUSTOMER_PASSWORD`, and refuses to run when `APP_ENV=production`. Product images are local SVG illustrations under `frontend/img/products/`.
 
 ## Running tests
+
+### Backend Pytest Suite
 
 ```bash
 docker compose exec backend pytest                     # inside the container (Python 3.12)
@@ -375,25 +443,55 @@ docker compose exec backend pytest                     # inside the container (P
 cd backend && pytest --cov=app --cov-report=term-missing
 ```
 
-The suite has **215 tests** and covers 99 % of the application code.
+The suite has **253 tests** and covers 97 % of the application code.
 
 **How the tests stay safe and honest**
 - They run against **real PostgreSQL**, never SQLite and never mocks of the database.
 - The test database is separate: `DATABASE_URL` with `_test` appended (or `TEST_DATABASE_URL`). It is created automatically and the suite **refuses to start** if the name does not end in `_test` — your development data can never be touched.
 - At the start of a session the schema is rebuilt **by the Alembic migrations**, so the migrations themselves are tested; every table is truncated after each test.
 - A migration test fails when the models and the migrated schema differ, and another checks a full downgrade → upgrade round trip.
-- Concurrency is tested for real: a test holds a row lock, fires two checkouts and releases the lock only when both are waiting. Removing the `FOR UPDATE` locks from the order service makes these tests fail (checked by hand), so they really guard against overselling and duplicate orders. Similar tests make two clients collide on a unique value (email, slug, category, first cart) and expect a clean `409`.
+- Concurrency is tested for real: a test holds a row lock, fires two checkouts and releases the lock only when both are waiting. Cart concurrency and order creation row locks prevent overselling and duplicate orders.
 
 | File | Covers |
 |---|---|
 | `test_auth.py` | register, login (email or username), `/me`, JWT edge cases (expired, forged, unsigned, deleted or disabled user), password hashing |
-| `test_products.py`, `test_categories.py` | listing, search, filters, sorting, pagination, admin CRUD, validation, permissions |
+| `test_auth_enhanced.py` | HttpOnly cookies, refresh token rotation, logout revocation, password reset tokens |
+| `test_rate_limit.py` | IP rate limiting on login/register/forgot-password, Retry-After header, counter reset on login |
+| `test_products.py`, `test_categories.py` | listing, search (including slug lookup and pg_trgm), filters, sorting, pagination, admin CRUD, validation, permissions |
 | `test_cart.py` | add / update / remove / clear, stock limits, isolation between users |
-| `test_orders.py` | checkout, empty cart, insufficient stock (all-or-nothing), snapshots, server-side prices, overselling and double submit |
-| `test_admin.py` | access control for every admin endpoint, order status rules and restocking, user enable/disable |
-| `test_health.py`, `test_config.py`, `test_migrations.py`, `test_seed.py`, `test_races.py` | health checks, CORS, error handling, settings validation, migrations, seed, unique-value races |
+| `test_cart_concurrency.py` | concurrent cart modifications, row locking order, stock isolation |
+| `test_orders.py` | checkout, order numbers, state machine transitions, empty cart, insufficient stock, snapshots, server-side prices, overselling and double submit |
+| `test_admin.py` | access control for every admin endpoint, order search, order status rules and restocking, user enable/disable |
+| `test_audit_logs.py` | audit logging on product CRUD, order status changes, user activation toggle, admin log query API |
+| `test_health.py`, `test_config.py`, `test_migrations.py`, `test_seed.py`, `test_races.py` | health checks, security headers, CORS, error handling, settings validation, migrations, seed idempotency, unique-value races |
 
-**Frontend checks.** The pages were verified during development in a real browser (Playwright): customer and admin flows against the live API, the Loading / Empty / Error states (by delaying, failing and aborting requests), responsive layouts at three widths, expired-token handling, XSS attempts, and an axe-core audit (WCAG 2.0/2.1 A + AA and best practices) over every page at two widths: **0 violations**. Those browser scripts are not part of this repository.
+### End-to-End & Accessibility Tests (Playwright + axe-core)
+
+Playwright runs automated browser tests against the live frontend and backend, covering the complete user journeys as well as automated WCAG 2.0/2.1 A+AA accessibility audits with `@axe-core/playwright`.
+
+```bash
+# Install dependencies & Playwright browser
+npm install
+npx playwright install --with-deps chromium
+
+# Run the complete E2E and accessibility test suite
+npm test
+
+# Run only E2E functional tests
+npm run test:e2e
+
+# Run only axe-core accessibility tests (0 violations expected)
+npm run test:a11y
+```
+
+| E2E Test Suite | Covers |
+|---|---|
+| `e2e/auth.spec.js` | User login, cookie authentication, logout, registration validation, forgot password flow |
+| `e2e/products.spec.js` | Catalogue browsing, slug-based navigation, live search, category filtering |
+| `e2e/cart.spec.js` | Adding products, quantity increment/decrement, cart item removal, subtotal computation |
+| `e2e/checkout.spec.js` | Checkout flow, order placement, order confirmation view, customer orders history |
+| `e2e/admin.spec.js` | Admin dashboard counters, order search, status transitions, audit log viewer |
+| `e2e/accessibility.spec.js` | Full axe-core WCAG A/AA audits across Homepage, Login, Register, Product detail, Cart, and Admin dashboard |
 
 ## API documentation
 
@@ -403,14 +501,20 @@ Interactive docs: **<http://localhost:8000/docs>** (Swagger UI, with an *Authori
 |---|---|---|---|
 | `GET` | `/health` | Public | Liveness check |
 | `GET` | `/health/db` | Public | Readiness check (database); `503` when PostgreSQL is unreachable |
-| `POST` | `/api/v1/auth/register` | Public | Register a customer account |
-| `POST` | `/api/v1/auth/login` | Public | Log in (OAuth2 form) and get an access token |
-| `GET` | `/api/v1/auth/me` | Customer | Get the current user |
+| `POST` | `/api/v1/auth/register` | Public | Register a customer account (rate limited) |
+| `POST` | `/api/v1/auth/login` | Public | Log in, receive HttpOnly `access_token` & `refresh_token` cookies and `csrf_token` cookie; returns safe metadata only (`authenticated`, `expires_in`) |
+| `POST` | `/api/v1/auth/refresh` | Public | Rotate refresh token and issue new cookies; returns safe metadata only |
+| `POST` | `/api/v1/auth/logout` | Authenticated | Revoke refresh token and clear auth cookies |
+| `POST` | `/api/v1/auth/change-password` | Authenticated | Change password with current password verification |
+| `POST` | `/api/v1/auth/forgot-password` | Public | Request a password reset token (rate limited) |
+| `POST` | `/api/v1/auth/reset-password` | Public | Reset password using a valid reset token |
+| `GET` | `/api/v1/auth/me` | Customer | Get the current authenticated user |
 | `GET` | `/api/v1/products` | Public | List products: `search`, `category`, `category_id`, `brand`, `min_price`, `max_price`, `sort`, `page`, `limit` (default 12, max 100) |
-| `GET` | `/api/v1/products/{product_id}` | Public | Get a product |
-| `POST` | `/api/v1/products` | Admin | Create a product |
-| `PATCH` | `/api/v1/products/{product_id}` | Admin | Update a product (partial) |
-| `DELETE` | `/api/v1/products/{product_id}` | Admin | Delete a product |
+| `GET` | `/api/v1/products/{product_id}` | Public | Get a product by ID |
+| `GET` | `/api/v1/products/by-slug/{slug}` | Public | Get a product by unique slug |
+| `POST` | `/api/v1/products` | Admin | Create a product (recorded in audit logs) |
+| `PATCH` | `/api/v1/products/{product_id}` | Admin | Update a product (partial; recorded in audit logs) |
+| `DELETE` | `/api/v1/products/{product_id}` | Admin | Delete a product (recorded in audit logs) |
 | `GET` | `/api/v1/categories` | Public | List categories |
 | `GET` | `/api/v1/categories/{category_id}` | Public | Get a category |
 | `POST` | `/api/v1/categories` | Admin | Create a category |
@@ -426,18 +530,17 @@ Interactive docs: **<http://localhost:8000/docs>** (Swagger UI, with an *Authori
 | `GET` | `/api/v1/orders/{order_id}` | Customer | Get one of my orders (`404` for anybody else's) |
 | `GET` | `/api/v1/admin/stats` | Admin | Dashboard counters |
 | `GET` | `/api/v1/admin/products` | Admin | List all products, including hidden ones |
-| `GET` | `/api/v1/admin/orders` | Admin | List all orders; optional `status` filter |
-| `PATCH` | `/api/v1/admin/orders/{order_id}/status` | Admin | Change an order's status |
+| `GET` | `/api/v1/admin/orders` | Admin | List orders; filters: `status`, `search` (order number or user info) |
+| `PATCH` | `/api/v1/admin/orders/{order_id}/status` | Admin | Change order status via state machine (recorded in audit logs) |
 | `GET` | `/api/v1/admin/users` | Admin | List users; optional `search` |
-| `PATCH` | `/api/v1/admin/users/{user_id}` | Admin | Enable or disable an account |
-
-*Public* needs no token, *Customer* needs any valid token, *Admin* needs a token of an admin. Beyond the required endpoints this API adds `/admin/products` (hidden products), `/admin/stats` (dashboard), `PATCH /admin/users/{id}` (disable accounts) and `/health/db`.
+| `PATCH` | `/api/v1/admin/users/{user_id}` | Admin | Enable or disable an account (recorded in audit logs) |
+| `GET` | `/api/v1/admin/audit-logs` | Admin | Query audit log trail; filters: `action`, `entity_type`, pagination |
 
 ### Conventions
 
 - **Paginated lists** return `{"items": [...], "total": 19, "page": 1, "limit": 12, "pages": 2}`.
-- **Money** is a decimal on the server and a JSON number in responses (`599.99`).
-- **Errors** are `{"detail": "message"}`; validation errors (`422`) are `{"detail": [{"loc": [...], "msg": "...", "type": "..."}]}` without the submitted value. Status codes: `400` bad request, `401` missing/invalid token, `403` not allowed or account disabled, `404` not found, `409` conflict (duplicate, insufficient stock, category in use, final order status), `422` validation, `500` generic message only.
+- **Money** follows a strict pipeline: PostgreSQL `NUMERIC` → SQLAlchemy `Decimal` → Pydantic `Decimal` → JSON exact decimal string (e.g. `{"price": "599.99"}`). It is never returned as a JSON number or float (e.g. `599.99`).
+- **Errors** are `{"detail": "message"}`; validation errors (`422`) are `{"detail": [{"loc": [...], "msg": "...", "type": "..."}]}` without the submitted value. Status codes: `400` bad request, `401` missing/invalid token, `403` not allowed or account disabled, `404` not found, `409` conflict (duplicate, insufficient stock, category in use, invalid order state transition), `422` validation, `429` rate limit exceeded, `500` generic message only.
 
 ### Authentication flow
 
@@ -450,13 +553,14 @@ sequenceDiagram
     B->>A: POST /auth/login (form: username, password)
     A->>D: find the user by email or username
     A->>A: bcrypt check (also run for unknown users)
-    A-->>B: 200 {access_token, token_type, expires_in}
-    Note over B: JWT claims: sub (user id), iat, exp.<br/>Stored in localStorage (Remember me) or sessionStorage.
-    B->>A: GET /orders  with  Authorization: Bearer token
-    A->>A: verify signature and exp
+    A->>D: persist RefreshToken record
+    A-->>B: 200 OK + Set-Cookie: access_token, refresh_token (HttpOnly), csrf_token
+    Note over B: Zero tokens stored in localStorage/sessionStorage.<br/>api.js reads csrf_token cookie and sends X-CSRF-Token header.
+    B->>A: POST /orders  with  Cookie: access_token=... & X-CSRF-Token: ...
+    A->>A: verify CSRF token and access token signature/expiration
     A->>D: load the user, check is_active and role
-    A-->>B: 200 data
-    Note over B,A: Expired or invalid token: 401. api.js clears the session<br/>and sends protected pages to the login page.
+    A-->>B: 200 Order Created
+    Note over B,A: On access token expiry (401), api.js transparently calls<br/>POST /auth/refresh using HttpOnly refresh_token cookie and retries original request.
 ```
 
 ### Try it with curl
@@ -469,7 +573,7 @@ curl -s -X POST http://localhost:8000/api/v1/auth/register \
 
 # Log in: "username" accepts the email address or the username
 curl -s -X POST http://localhost:8000/api/v1/auth/login -d 'username=jane@example.com&password=S3cure-pass!'
-# {"access_token":"eyJ...","token_type":"bearer","expires_in":3600}
+# Sets HttpOnly cookies and returns safe metadata only (authenticated, expires_in)
 
 TOKEN=eyJ...    # paste the access_token value here
 
@@ -500,21 +604,18 @@ You can log in with either the email or the username. Changing the password vari
 `.github/workflows/ci.yml` runs on every **push** and **pull request**:
 
 1. **Tests** (Python 3.12 and 3.13): checkout → set up Python → install `requirements-dev.txt` → `pytest --cov` against a PostgreSQL 17 service container. The service uses `trust` authentication, so there is no database password in the repository.
-2. **Docker**: build the lean production image, then `cp .env.example .env`, `docker compose up -d --build --wait`, seed, and a smoke test (health checks, product list, the frontend, an admin login and `/admin/stats`). Logs are printed when something fails, and the stack is always torn down.
+2. **Docker, Smoke Tests & Playwright E2E**: build the lean production image, then `cp .env.example .env`, `docker compose up -d --build --wait`, seed, smoke test (health checks, product list, the frontend, an admin login and `/admin/stats`), set up Node.js, install Playwright browsers, and execute the complete Playwright E2E and axe-core accessibility suite (`NO_WEBSERVER=1 npx playwright test`). Uploads HTML reports and traces on failure.
 
-The workflow passes `actionlint`, and both jobs were rehearsed locally on a clean checkout (both Python versions with a password-less PostgreSQL; the Docker steps executed straight from the YAML file).
+The workflow passes `actionlint`, and both jobs were rehearsed locally on a clean checkout.
 
 ## Future improvements
 
-Deliberately **out of scope** for this version, in roughly the order I would add them:
+Deliberately **out of scope** for this version, in roughly the order to consider next:
 
-- **Payments** — a payment gateway with webhooks (the current checkout takes no money).
-- **Email notifications** — order confirmation and status-change emails; password reset.
-- **Image upload** — object storage and thumbnails instead of image URLs.
-- **Redis caching** — cache the product catalogue and category list; also a store for rate limiting.
+- **Payments** — a payment gateway with webhooks (e.g., Stripe) to transition orders from pending to paid.
+- **Email notifications** — asynchronous transactional email sending via SMTP / SendGrid for order confirmation and status changes.
+- **Image upload** — S3/MinIO object storage and automatic thumbnail generation instead of image URLs.
+- **Redis caching & distributed rate limiting** — cache the product catalogue and category list; store rate limiting across multi-replica deployments.
 - **Reviews and ratings** on products.
 - **Wishlist** per customer.
-- **Advanced analytics** — revenue over time, best sellers, stock alerts in the admin dashboard.
-- Security hardening: refresh tokens and logout/revocation, login rate limiting, httpOnly-cookie sessions, password change.
-- Browser end-to-end tests (Playwright) and an accessibility check in CI.
-- Switch the test client from `httpx` to `httpx2` when Starlette drops its `httpx` fallback (it currently only emits a deprecation warning, which `pytest.ini` filters).
+- **Advanced analytics** — revenue over time charts, top-selling categories, and low-stock alerts in the admin dashboard.

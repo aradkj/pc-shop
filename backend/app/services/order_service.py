@@ -2,15 +2,16 @@ import logging
 from collections.abc import Iterable
 from decimal import Decimal
 
-from sqlalchemy import ColumnElement, delete, func, select
+from sqlalchemy import ColumnElement, delete, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.models.cart import Cart, CartItem
-from app.models.order import Order, OrderStatus
+from app.models.order import ALLOWED_ORDER_TRANSITIONS, Order, OrderStatus
 from app.models.order_item import OrderItem
 from app.models.product import Product
 from app.models.user import User
+from app.services import audit_service
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def _lock_products(db: Session, product_ids: Iterable[int]) -> dict[int, Product
     return {product.id: product for product in db.scalars(stmt)}
 
 
-def create_order(db: Session, user: User) -> Order:
+def create_order(db: Session, user: User, order_number: str | None = None) -> Order:
     """Turn the user's cart into an order inside one database transaction.
 
     Prices, totals and stock are all (re)computed here from the database - the
@@ -40,8 +41,9 @@ def create_order(db: Session, user: User) -> Order:
     is committed together, or nothing is changed.
     """
     try:
-        order = _build_order(db, user)
+        order = _build_order(db, user, order_number=order_number)
         db.commit()
+
     except Exception:
         db.rollback()
         raise
@@ -50,7 +52,19 @@ def create_order(db: Session, user: User) -> Order:
     return order
 
 
-def _build_order(db: Session, user: User) -> Order:
+def generate_order_number(db: Session) -> str:
+    from datetime import UTC, datetime
+    import secrets
+
+    while True:
+        date_str = datetime.now(UTC).strftime("%Y%m%d")
+        rand_suffix = secrets.token_hex(4).upper()
+        candidate = f"ORD-{date_str}-{rand_suffix}"
+        if db.scalar(select(Order.id).where(Order.order_number == candidate)) is None:
+            return candidate
+
+
+def _build_order(db: Session, user: User, order_number: str | None = None) -> Order:
     # 1. Lock the cart first: a double-clicked "Checkout" serializes here and the
     #    second request finds an empty cart instead of creating a duplicate order.
     cart = db.scalars(select(Cart).where(Cart.user_id == user.id).with_for_update()).one_or_none()
@@ -64,7 +78,13 @@ def _build_order(db: Session, user: User) -> Order:
     products = _lock_products(db, (item.product_id for item in cart_items))
 
     # 3. Validate every line against the *current* product data and build the order.
-    order = Order(user_id=user.id, status=OrderStatus.PENDING, total_price=Decimal("0.00"))
+    order = Order(
+        user_id=user.id,
+        order_number=order_number or generate_order_number(db),
+        status=OrderStatus.PENDING,
+        total_price=Decimal("0.00"),
+    )
+
     total = Decimal("0.00")
     for cart_item in cart_items:
         product = products[cart_item.product_id]
@@ -116,9 +136,28 @@ def list_user_orders(db: Session, user: User, *, page: int, limit: int) -> tuple
 
 
 def list_all_orders(
-    db: Session, *, status: OrderStatus | None, page: int, limit: int
+    db: Session,
+    *,
+    status: OrderStatus | None = None,
+    search: str | None = None,
+    page: int,
+    limit: int,
 ) -> tuple[list[Order], int]:
-    conditions = [Order.status == status] if status is not None else []
+    conditions: list[ColumnElement[bool]] = []
+    if status is not None:
+        conditions.append(Order.status == status)
+    if search and search.strip():
+        escaped = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
+        conditions.append(
+            or_(
+                Order.order_number.ilike(pattern, escape="\\"),
+                Order.user.has(User.email.ilike(pattern, escape="\\")),
+                Order.user.has(User.username.ilike(pattern, escape="\\")),
+                Order.user.has(User.first_name.ilike(pattern, escape="\\")),
+                Order.user.has(User.last_name.ilike(pattern, escape="\\")),
+            )
+        )
     return _list_orders(db, conditions, page, limit)
 
 
@@ -134,10 +173,22 @@ def get_user_order(db: Session, user: User, order_id: int) -> Order:
     return order
 
 
-def update_order_status(db: Session, order_id: int, new_status: OrderStatus) -> Order:
+def update_order_status(
+    db: Session, order_id: int, new_status: OrderStatus, admin_user_id: int | None = None
+) -> Order:
     """Change an order's status (admin). Cancelling returns the stock."""
     try:
-        order = _apply_status(db, order_id, new_status)
+        order, old_status = _apply_status(db, order_id, new_status)
+        if admin_user_id is not None:
+            audit_service.record_audit_log(
+                db,
+                admin_user_id=admin_user_id,
+                action="ORDER_STATUS_CHANGED",
+                entity_type="order",
+                entity_id=order.id,
+                old_value={"status": old_status.value},
+                new_value={"status": new_status.value},
+            )
         db.commit()
     except Exception:
         db.rollback()
@@ -146,7 +197,13 @@ def update_order_status(db: Session, order_id: int, new_status: OrderStatus) -> 
     return order
 
 
-def _apply_status(db: Session, order_id: int, new_status: OrderStatus) -> Order:
+def validate_order_transition(current: OrderStatus, new_status: OrderStatus) -> None:
+    allowed = ALLOWED_ORDER_TRANSITIONS.get(current, set())
+    if new_status not in allowed:
+        raise ConflictError(f"Invalid order status transition: {current.value} -> {new_status.value}")
+
+
+def _apply_status(db: Session, order_id: int, new_status: OrderStatus) -> tuple[Order, OrderStatus]:
     order = db.scalars(
         select(Order)
         .where(Order.id == order_id)
@@ -158,18 +215,13 @@ def _apply_status(db: Session, order_id: int, new_status: OrderStatus) -> Order:
         raise NotFoundError("Order not found")
 
     current = order.status
-    if new_status == current:
-        return order
-    if current == OrderStatus.CANCELLED:
-        raise ConflictError("A cancelled order cannot be changed")
-    if new_status == OrderStatus.CANCELLED and current == OrderStatus.COMPLETED:
-        raise ConflictError("A completed order cannot be cancelled")
+    validate_order_transition(current, new_status)
 
     if new_status == OrderStatus.CANCELLED:
         _restock(db, order)
     order.status = new_status
     logger.info("Order status changed: id=%s %s -> %s", order.id, current, new_status)
-    return order
+    return order, current
 
 
 def _restock(db: Session, order: Order) -> None:

@@ -4,7 +4,7 @@
  */
 
 import { api } from "./api.js";
-import { clearSession, getToken, saveSession, setFlash, setStoredUser } from "./session.js";
+import { clearSession, getStoredUser, setFlash, setStoredUser } from "./session.js";
 import {
   clearFormErrors,
   emptyState,
@@ -22,17 +22,17 @@ import {
   showFieldErrors,
   siteUrl,
   statusBadge,
+  toast,
   withBusy,
 } from "./ui.js";
 
-export const isLoggedIn = () => Boolean(getToken());
+export const isLoggedIn = () => Boolean(getStoredUser());
 
 export async function login(identifier, password, remember) {
-  clearSession(); // never send a stale token along with fresh credentials
-  const token = await api.post("/auth/login", { username: identifier, password }, { form: true });
-  saveSession(token.access_token, remember);
+  clearSession();
+  await api.post("/auth/login", { username: identifier, password }, { form: true });
   const user = await api.get("/auth/me");
-  setStoredUser(user);
+  setStoredUser(user, remember);
   return user;
 }
 
@@ -41,7 +41,12 @@ export async function register(details) {
   return login(details.email, details.password, false); // sign the new customer in right away
 }
 
-export function logout() {
+export async function logout() {
+  try {
+    await api.post("/auth/logout");
+  } catch {
+    // ignore
+  }
   clearSession();
   window.location.href = siteUrl("index.html");
 }
@@ -68,18 +73,19 @@ export function redirectToLogin(message) {
  * decides what the page shows.
  */
 export async function requireUser({ admin = false } = {}) {
-  if (!isLoggedIn()) {
-    redirectToLogin("Please log in to continue.");
-    return null;
-  }
-  let user;
+  let user = null;
   try {
     user = await api.get("/auth/me");
+    setStoredUser(user);
   } catch (error) {
-    if (error.status === 401) return null; // the 401 handler is already redirecting
+    if (error.status === 401) {
+      clearSession();
+      redirectToLogin("Please log in to continue.");
+      return null;
+    }
     throw error;
   }
-  setStoredUser(user);
+
   if (admin && user.role !== "admin") {
     mount(
       document.querySelector("#main"),
@@ -116,6 +122,44 @@ export function initLoginPage() {
       showApiError(form, error);
     }
   });
+
+  const toggleForgot = document.querySelector("#toggle-forgot");
+  const forgotCard = document.querySelector("#forgot-password-card");
+  const forgotForm = document.querySelector("#forgot-form");
+
+  if (toggleForgot && forgotCard) {
+    toggleForgot.addEventListener("click", (e) => {
+      e.preventDefault();
+      forgotCard.hidden = !forgotCard.hidden;
+      if (!forgotCard.hidden) {
+        forgotCard.querySelector("input")?.focus();
+      }
+    });
+  }
+
+  if (forgotForm) {
+    forgotForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const email = forgotForm.querySelector("#forgot-email").value.trim();
+      const alertBox = forgotForm.querySelector("[data-forgot-alert]");
+      try {
+        await withBusy(forgotForm.querySelector("[type=submit]"), async () => {
+          const res = await api.post("/auth/forgot-password", { email });
+          if (alertBox) {
+            alertBox.hidden = false;
+            alertBox.className = "alert alert--success";
+            alertBox.textContent = res?.detail || "Password reset instructions initiated.";
+          }
+        });
+      } catch (err) {
+        if (alertBox) {
+          alertBox.hidden = false;
+          alertBox.className = "alert alert--error";
+          alertBox.textContent = err.message || "Could not process request.";
+        }
+      }
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +190,6 @@ export function initRegisterPage() {
       window.location.href = siteUrl("index.html");
     } catch (error) {
       if (error.status === 409) {
-        // The API names the clashing value ("Email is already registered"): show it under that field.
         const field = /email/i.test(error.message) ? "email" : "username";
         showFieldErrors(form, { [field]: error.message });
       } else {
@@ -178,6 +221,32 @@ export async function initProfilePage() {
     </dl>`,
   );
 
+  const changePwdForm = document.querySelector("#change-password-form");
+  if (changePwdForm) {
+    changePwdForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearFormErrors(changePwdForm);
+      const data = Object.fromEntries(new FormData(changePwdForm));
+      if (data.new_password !== data.confirm_new_password) {
+        showFieldErrors(changePwdForm, { confirm_new_password: "New passwords do not match." });
+        return;
+      }
+      try {
+        await withBusy(changePwdForm.querySelector("[type=submit]"), async () => {
+          const res = await api.post("/auth/change-password", {
+            current_password: data.current_password,
+            new_password: data.new_password,
+            confirm_new_password: data.confirm_new_password,
+          });
+          toast(res?.detail || "Password changed successfully.", "success");
+          changePwdForm.reset();
+        });
+      } catch (err) {
+        showApiError(changePwdForm, err);
+      }
+    });
+  }
+
   const loadOrders = async () => {
     mount(recent, loadingState("Loading your orders\u2026"));
     try {
@@ -199,7 +268,7 @@ export async function initProfilePage() {
           <ul class="order-list">
             ${items.map(
               (order) => html`<li class="panel">
-                <a href="${siteUrl("pages/orders.html")}?highlight=${order.id}"><strong>Order #${order.id}</strong></a>
+                <a href="${siteUrl("pages/orders.html")}?highlight=${order.id}"><strong>Order #${order.order_number || order.id}</strong></a>
                 ${statusBadge(order.status)}
                 <p class="muted order-meta">${formatDateTime(order.created_at)} \u00b7 ${plural(order.items.length, "item")} \u00b7 ${formatPrice(order.total_price)}</p>
               </li>`,

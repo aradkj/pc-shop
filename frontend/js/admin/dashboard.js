@@ -29,10 +29,15 @@ export async function renderDashboard(view) {
       view,
       html`
         <div class="stat-grid" role="group" aria-label="Store statistics">
-          ${statCard("Products", stats.total_products, "box")}
-          ${statCard("Orders", stats.total_orders, "clipboard")}
-          ${statCard("Users", stats.total_users, "users")}
-          ${statCard("Pending orders", stats.pending_orders, "clock")}
+          ${statCard("Total Orders", stats.total_orders, "clipboard")}
+          ${statCard("Pending Orders", stats.pending_orders, "clock")}
+          ${statCard("Processing Orders", stats.processing_orders ?? 0, "clock")}
+          ${statCard("Completed Orders", stats.completed_orders ?? 0, "check")}
+          ${statCard("Cancelled Orders", stats.cancelled_orders ?? 0, "alert")}
+          ${statCard("Total Revenue", formatPrice(stats.total_revenue ?? 0), "tag")}
+          ${statCard("Low Stock Products", stats.low_stock_products ?? 0, "box")}
+          ${statCard("Total Products", stats.total_products, "box")}
+          ${statCard("Total Users", stats.total_users, "users")}
         </div>
         <div class="section__header">
           <h2>Recent orders</h2>

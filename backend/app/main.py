@@ -14,6 +14,7 @@ from app.core.config import API_V1_PREFIX, get_settings
 from app.core.database import engine
 from app.core.exceptions import register_exception_handlers
 from app.core.logging_config import configure_logging
+from app.core.middleware import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +60,15 @@ def create_app() -> FastAPI:
         openapi_tags=TAGS_METADATA,
         lifespan=lifespan,
     )
-    # Tokens travel in the Authorization header (no cookies), so credentials are not allowed.
+    # Allow credentials so HttpOnly cookies are supported across configured origins.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
     )
+    app.add_middleware(SecurityHeadersMiddleware)
     register_exception_handlers(app)
     app.include_router(health.router)
     app.include_router(api_router, prefix=API_V1_PREFIX)

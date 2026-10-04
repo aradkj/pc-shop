@@ -33,6 +33,10 @@ class Settings:
     cors_origins: tuple[str, ...]
     log_level: str
     bcrypt_rounds: int
+    refresh_token_expire_days: int = 7
+    rate_limit_login_per_minute: int = 5
+    rate_limit_register_per_minute: int = 5
+    rate_limit_reset_per_minute: int = 5
 
     @property
     def is_production(self) -> bool:
@@ -41,6 +45,24 @@ class Settings:
     @property
     def has_placeholder_secret(self) -> bool:
         return self.secret_key.lower().startswith(_PLACEHOLDER_SECRET_PREFIX)
+
+    @property
+    def cookie_secure(self) -> bool:
+        env_val = os.getenv("COOKIE_SECURE")
+        if env_val is not None:
+            return env_val.strip().lower() in ("true", "1", "yes")
+        return self.is_production
+
+    @property
+    def cookie_samesite(self) -> str:
+        return os.getenv("COOKIE_SAMESITE", "lax").strip().lower()
+
+    @property
+    def enable_hsts(self) -> bool:
+        env_val = os.getenv("ENABLE_HSTS")
+        if env_val is not None:
+            return env_val.strip().lower() in ("true", "1", "yes")
+        return self.is_production
 
 
 def _required(name: str) -> str:

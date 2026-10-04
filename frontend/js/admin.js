@@ -5,6 +5,7 @@
  */
 
 import { requireUser } from "./auth.js";
+import { renderAuditLogs } from "./admin/audit_logs.js";
 import { renderCategories } from "./admin/categories.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { renderOrders } from "./admin/orders.js";
@@ -18,7 +19,9 @@ const SECTIONS = [
   { id: "categories", label: "Categories", render: renderCategories },
   { id: "orders", label: "Orders", render: renderOrders },
   { id: "users", label: "Users", render: renderUsers },
+  { id: "audit", label: "Audit Logs", render: renderAuditLogs },
 ];
+
 
 export async function initAdminPage() {
   const user = await requireUser({ admin: true });

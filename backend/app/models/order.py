@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, enum_check_constraint, enum_column_type
@@ -21,6 +21,15 @@ class OrderStatus(enum.StrEnum):
     CANCELLED = "cancelled"
 
 
+ALLOWED_ORDER_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
+    OrderStatus.PENDING: {OrderStatus.PROCESSING, OrderStatus.CANCELLED},
+    OrderStatus.PROCESSING: {OrderStatus.SHIPPED, OrderStatus.CANCELLED},
+    OrderStatus.SHIPPED: {OrderStatus.COMPLETED},
+    OrderStatus.COMPLETED: set(),
+    OrderStatus.CANCELLED: set(),
+}
+
+
 class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
@@ -29,6 +38,7 @@ class Order(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    order_number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     # RESTRICT: a user with orders can be deactivated but never hard-deleted.
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     total_price: Mapped[Decimal] = mapped_column(Numeric(12, 2))

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from app.api.deps import DbSession, require_admin
+from app.api.deps import AdminUser, DbSession, require_admin
 from app.api.responses import ADMIN_RESPONSES, CONFLICT, NOT_FOUND
 from app.schemas.common import Page, build_page
 from app.schemas.product import ProductCreate, ProductFilters, ProductRead, ProductUpdate
@@ -21,9 +21,9 @@ def list_products(filters: Annotated[ProductFilters, Query()], db: DbSession):
     return build_page(items, total, filters.page, filters.limit)
 
 
-@router.get("/{product_id}", response_model=ProductRead, summary="Get a product", responses=NOT_FOUND)
-def get_product(product_id: int, db: DbSession):
-    return product_service.get_product(db, product_id)
+@router.get("/{identifier}", response_model=ProductRead, summary="Get a product by ID or slug", responses=NOT_FOUND)
+def get_product(identifier: str, db: DbSession):
+    return product_service.get_product(db, identifier)
 
 
 @router.post(
@@ -31,11 +31,10 @@ def get_product(product_id: int, db: DbSession):
     response_model=ProductRead,
     status_code=status.HTTP_201_CREATED,
     summary="Create a product (admin)",
-    dependencies=[Depends(require_admin)],
     responses={**ADMIN_RESPONSES, **CONFLICT},
 )
-def create_product(data: ProductCreate, db: DbSession):
-    return product_service.create_product(db, data)
+def create_product(data: ProductCreate, admin: AdminUser, db: DbSession):
+    return product_service.create_product(db, data, admin_user_id=admin.id)
 
 
 @router.patch(
@@ -43,11 +42,10 @@ def create_product(data: ProductCreate, db: DbSession):
     response_model=ProductRead,
     summary="Update a product (admin)",
     description="Partial update. Set `is_active` to false to hide a product without deleting it.",
-    dependencies=[Depends(require_admin)],
     responses={**ADMIN_RESPONSES, **NOT_FOUND, **CONFLICT},
 )
-def update_product(product_id: int, data: ProductUpdate, db: DbSession):
-    return product_service.update_product(db, product_id, data)
+def update_product(product_id: int, data: ProductUpdate, admin: AdminUser, db: DbSession):
+    return product_service.update_product(db, product_id, data, admin_user_id=admin.id)
 
 
 @router.delete(
@@ -55,9 +53,9 @@ def update_product(product_id: int, data: ProductUpdate, db: DbSession):
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a product (admin)",
     description="Permanent. Existing orders keep their lines (name and price are snapshots).",
-    dependencies=[Depends(require_admin)],
     responses={**ADMIN_RESPONSES, **NOT_FOUND},
 )
-def delete_product(product_id: int, db: DbSession) -> Response:
-    product_service.delete_product(db, product_id)
+def delete_product(product_id: int, admin: AdminUser, db: DbSession) -> Response:
+    product_service.delete_product(db, product_id, admin_user_id=admin.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+

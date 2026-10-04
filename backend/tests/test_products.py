@@ -33,7 +33,7 @@ def test_get_products(client, make_product):
     assert (body["total"], body["page"], body["limit"], body["pages"]) == (2, 1, 12, 1)
     assert len(body["items"]) == 2
     item = next(i for i in body["items"] if i["name"] == "Product A")
-    assert item["price"] == 599.99  # a JSON number, not a string
+    assert item["price"] == "599.99"  # exact decimal string representation
     assert item["stock"] == 10
     assert item["brand"] == "TestBrand"
     assert item["category"] == {"id": item["category_id"], "name": "Graphics Cards", "slug": "graphics-cards"}
@@ -60,7 +60,7 @@ def test_get_product(client, product):
     assert body["id"] == product.id
     assert body["name"] == "RTX Example"
     assert body["slug"] == "rtx-example"
-    assert body["price"] == 599.99
+    assert body["price"] == "599.99"
     assert body["category"]["slug"] == "graphics-cards"
     assert body["is_active"] is True
 
@@ -78,8 +78,16 @@ def test_inactive_product_is_not_found_publicly(client, make_product):
     assert client.get(f"{PRODUCTS_URL}/{hidden.id}").status_code == 404
 
 
-def test_product_id_must_be_an_integer(client):
-    assert client.get(f"{PRODUCTS_URL}/abc").status_code == 422
+def test_product_lookup_by_slug_and_nonexistent(client, make_product):
+    product = make_product(name="GeForce RTX 4070")
+    # Lookup by slug
+    res = client.get(f"{PRODUCTS_URL}/{product.slug}")
+    assert res.status_code == 200
+    assert res.json()["id"] == product.id
+    assert res.json()["slug"] == product.slug
+
+    # Nonexistent identifier gives 404
+    assert client.get(f"{PRODUCTS_URL}/nonexistent-slug-xyz").status_code == 404
 
 
 # ---------------------------------------------------------- search / filter / sort
@@ -197,7 +205,7 @@ def test_admin_create_product(client, db, category, admin_headers):
     body = response.json()
     assert body["name"] == "ASUS Dual GeForce RTX 4070 Super 12GB"
     assert body["slug"] == "asus-dual-geforce-rtx-4070-super-12gb"
-    assert body["price"] == 599.99
+    assert body["price"] == "599.99"
     assert body["category"]["id"] == category.id
     assert body["is_active"] is True
 
@@ -276,7 +284,7 @@ def test_admin_update_product(client, db, product, admin_headers):
 
     assert response.status_code == 200
     body = response.json()
-    assert (body["price"], body["stock"], body["name"]) == (549.5, 3, "RTX Example (Updated)")
+    assert (body["price"], body["stock"], body["name"]) == ("549.50", 3, "RTX Example (Updated)")
     assert body["slug"] == "rtx-example"  # untouched
     assert body["brand"] == "TestBrand"  # untouched
 
@@ -361,3 +369,21 @@ def test_customer_cannot_update_or_delete_products(client, db, product, customer
     assert (patch.status_code, delete.status_code) == (403, 403)
     db.refresh(product)
     assert str(product.price) == "599.99"
+
+
+def test_money_decimal_precision_no_float_drift(client, category, admin_headers):
+    # In binary float, 0.1 + 0.2 = 0.30000000000000004
+    # Test that Decimal preservation prevents binary float drift
+    p1 = new_product_payload(category, name="Item 10c", price=0.10, slug="item-10c")
+    p2 = new_product_payload(category, name="Item 20c", price=0.20, slug="item-20c")
+
+    res1 = client.post(PRODUCTS_URL, json=p1, headers=admin_headers)
+    assert res1.status_code == 201
+    assert res1.json()["price"] == "0.10"
+    assert isinstance(res1.json()["price"], str)
+
+    res2 = client.post(PRODUCTS_URL, json=p2, headers=admin_headers)
+    assert res2.status_code == 201
+    assert res2.json()["price"] == "0.20"
+    assert isinstance(res2.json()["price"], str)
+

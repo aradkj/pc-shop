@@ -44,8 +44,9 @@ const categoryIcon = (slug) => CATEGORY_ICONS[slug] ?? "tag";
 // ---------------------------------------------------------------------------
 
 function productCard(product) {
-  const detailUrl = `${siteUrl("pages/product.html")}?id=${product.id}`;
+  const detailUrl = `${siteUrl("pages/product.html")}?slug=${product.slug || product.id}`;
   const stock = stockInfo(product);
+
   const unavailable = !product.is_active || product.stock <= 0;
   return html`
     <article class="product-card">
@@ -289,7 +290,8 @@ function productView(product) {
 
 export async function initProductPage() {
   const root = document.querySelector("#product-root");
-  const id = Number.parseInt(readQuery().id, 10);
+  const query = readQuery();
+  const identifier = query.slug || query.id;
 
   const notFound = () =>
     mount(
@@ -303,10 +305,10 @@ export async function initProductPage() {
     );
 
   async function load() {
-    if (!Number.isInteger(id) || id < 1) return notFound();
+    if (!identifier) return notFound();
     mount(root, loadingState("Loading product\u2026"));
     try {
-      const product = await api.get(`/products/${id}`);
+      const product = await api.get(`/products/${encodeURIComponent(identifier)}`);
       document.title = `${product.name} \u00b7 Arad Store`;
       mount(root, productView(product));
       wireProduct(product);
@@ -315,6 +317,7 @@ export async function initProductPage() {
       else renderError(root, error, load);
     }
   }
+
 
   function wireProduct(product) {
     const input = root.querySelector("[data-qty-input]");

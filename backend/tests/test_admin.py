@@ -52,11 +52,23 @@ def test_stats(client, make_product, make_order, customer_headers, other_headers
     make_product(is_active=False)  # inactive products still count: this is the admin's view
     make_order(customer_headers, (product, 1))
     second = make_order(other_headers, (product, 1))
+    client.patch(f"{ADMIN_URL}/orders/{second['id']}/status", json={"status": "processing"}, headers=admin_headers)
     client.patch(f"{ADMIN_URL}/orders/{second['id']}/status", json={"status": "shipped"}, headers=admin_headers)
 
     stats = client.get(f"{ADMIN_URL}/stats", headers=admin_headers).json()
 
-    assert stats == {"total_products": 2, "total_orders": 2, "total_users": 3, "pending_orders": 1}
+    assert stats == {
+        "total_products": 2,
+        "total_orders": 2,
+        "total_users": 3,
+        "pending_orders": 1,
+        "processing_orders": 0,
+        "shipped_orders": 1,
+        "completed_orders": 0,
+        "cancelled_orders": 0,
+        "total_revenue": "1199.98",
+        "low_stock_products": 0,
+    }
 
 
 # --------------------------------------------------------------------------- products
@@ -93,6 +105,7 @@ def test_admin_lists_all_orders_with_customer_and_lines(client, product, make_or
 def test_admin_filters_orders_by_status(client, product, make_order, customer_headers, admin_headers):
     pending = make_order(customer_headers, (product, 1))
     shipped = make_order(customer_headers, (product, 1))
+    client.patch(f"{ADMIN_URL}/orders/{shipped['id']}/status", json={"status": "processing"}, headers=admin_headers)
     client.patch(f"{ADMIN_URL}/orders/{shipped['id']}/status", json={"status": "shipped"}, headers=admin_headers)
 
     def ids(status):
@@ -133,10 +146,12 @@ def test_cancelling_twice_does_not_restock_twice(client, db, product, make_order
     order_id = make_order(customer_headers, (product, 4))["id"]
     url = f"{ADMIN_URL}/orders/{order_id}/status"
 
-    client.patch(url, json={"status": "cancelled"}, headers=admin_headers)
+    first = client.patch(url, json={"status": "cancelled"}, headers=admin_headers)
+    assert first.status_code == 200
     again = client.patch(url, json={"status": "cancelled"}, headers=admin_headers)
 
-    assert again.status_code == 200  # same status: nothing to do
+    assert again.status_code == 409  # cancelled is a terminal state
+    assert again.json() == {"detail": "Invalid order status transition: cancelled -> cancelled"}
     db.refresh(product)
     assert product.stock == 10
 
@@ -149,17 +164,20 @@ def test_cancelled_order_is_final(client, product, make_order, customer_headers,
     response = client.patch(url, json={"status": "processing"}, headers=admin_headers)
 
     assert response.status_code == 409
-    assert response.json() == {"detail": "A cancelled order cannot be changed"}
+    assert response.json() == {"detail": "Invalid order status transition: cancelled -> processing"}
 
 
 def test_completed_order_cannot_be_cancelled(client, db, product, make_order, customer_headers, admin_headers):
     order_id = make_order(customer_headers, (product, 3))["id"]
     url = f"{ADMIN_URL}/orders/{order_id}/status"
+    client.patch(url, json={"status": "processing"}, headers=admin_headers)
+    client.patch(url, json={"status": "shipped"}, headers=admin_headers)
     client.patch(url, json={"status": "completed"}, headers=admin_headers)
 
     response = client.patch(url, json={"status": "cancelled"}, headers=admin_headers)
 
     assert response.status_code == 409
+    assert response.json() == {"detail": "Invalid order status transition: completed -> cancelled"}
     db.refresh(product)
     assert product.stock == 7  # nothing was restocked
 

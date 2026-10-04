@@ -69,7 +69,11 @@ const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "
 const dateTime = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 const dateOnly = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" });
 
-export const formatPrice = (amount) => currency.format(Number(amount));
+export const formatPrice = (amount) => {
+  if (amount === null || amount === undefined || amount === "") return "$0.00";
+  const num = typeof amount === "number" ? amount : Number(amount);
+  return isNaN(num) ? "$0.00" : currency.format(num);
+};
 export const formatDateTime = (iso) => dateTime.format(new Date(iso));
 export const formatDate = (iso) => dateOnly.format(new Date(iso));
 export const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);

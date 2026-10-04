@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from app.core.database import SessionLocal
 from app.main import app
-from app.models import Order, OrderItem, Product
+from app.models import Order, OrderItem, OrderStatus, Product
 from tests.helpers import wait_until_blocked
 
 ORDERS_URL = "/api/v1/orders"
@@ -36,13 +36,13 @@ def test_create_order(client, db, make_product, customer, customer_headers):
     assert response.status_code == 201
     order = response.json()
     assert order["status"] == "pending"
-    assert order["total_price"] == 1289.48  # 2 * 599.99 + 89.50, computed by the server
+    assert order["total_price"] == "1289.48"  # 2 * 599.99 + 89.50, computed by the server
     assert len(order["items"]) == 2
     gpu_line = next(line for line in order["items"] if line["product_name"] == "GPU")
     assert gpu_line["product_id"] == gpu.id
-    assert gpu_line["unit_price"] == 599.99
+    assert gpu_line["unit_price"] == "599.99"
     assert gpu_line["quantity"] == 2
-    assert gpu_line["subtotal"] == 1199.98
+    assert gpu_line["subtotal"] == "1199.98"
 
     stored = db.get(Order, order["id"])
     assert stored.user_id == customer.id
@@ -109,9 +109,9 @@ def test_create_order_ignores_client_supplied_values(client, db, product, custom
 
     assert response.status_code == 201
     order = response.json()
-    assert order["total_price"] == 599.99
+    assert order["total_price"] == "599.99"
     assert order["status"] == "pending"
-    assert [(line["unit_price"], line["quantity"]) for line in order["items"]] == [(599.99, 1)]
+    assert [(line["unit_price"], line["quantity"]) for line in order["items"]] == [("599.99", 1)]
     assert db.get(Order, order["id"]).user_id == customer.id
 
 
@@ -121,8 +121,8 @@ def test_checkout_uses_the_current_database_price(client, product, customer_head
 
     order = client.post(ORDERS_URL, headers=customer_headers).json()
 
-    assert order["total_price"] == 1000
-    assert order["items"][0]["unit_price"] == 500
+    assert order["total_price"] == "1000.00"
+    assert order["items"][0]["unit_price"] == "500.00"
 
 
 def test_order_lines_are_snapshots(client, product, customer_headers, admin_headers):
@@ -131,13 +131,13 @@ def test_order_lines_are_snapshots(client, product, customer_headers, admin_head
 
     client.patch(f"/api/v1/products/{product.id}", json={"name": "Renamed", "price": 1}, headers=admin_headers)
     after_edit = client.get(f"{ORDERS_URL}/{order_id}", headers=customer_headers).json()
-    assert (after_edit["items"][0]["product_name"], after_edit["items"][0]["unit_price"]) == ("RTX Example", 599.99)
+    assert (after_edit["items"][0]["product_name"], after_edit["items"][0]["unit_price"]) == ("RTX Example", "599.99")
 
     assert client.delete(f"/api/v1/products/{product.id}", headers=admin_headers).status_code == 204
     after_delete = client.get(f"{ORDERS_URL}/{order_id}", headers=customer_headers).json()
     assert after_delete["items"][0]["product_id"] is None  # the product is gone ...
     assert after_delete["items"][0]["product_name"] == "RTX Example"  # ... the history is not
-    assert after_delete["total_price"] == 599.99
+    assert after_delete["total_price"] == "599.99"
 
 
 # ------------------------------------------------------------------ read orders
@@ -253,3 +253,98 @@ def test_double_submitted_checkout_creates_a_single_order(client, db, product, c
     db.expire_all()
     assert db.get(Product, product.id).stock == 8  # decreased once, not twice
     assert count(db, Order) == 1
+
+
+# ----------------------------------------------------------------- state machine tests
+
+
+VALID_TRANSITION_PATHS = [
+    # start, target
+    (OrderStatus.PENDING, OrderStatus.PROCESSING),
+    (OrderStatus.PENDING, OrderStatus.CANCELLED),
+    (OrderStatus.PROCESSING, OrderStatus.SHIPPED),
+    (OrderStatus.PROCESSING, OrderStatus.CANCELLED),
+    (OrderStatus.SHIPPED, OrderStatus.COMPLETED),
+]
+
+INVALID_TRANSITIONS = [
+    (OrderStatus.PENDING, OrderStatus.SHIPPED),
+    (OrderStatus.PENDING, OrderStatus.COMPLETED),
+    (OrderStatus.PROCESSING, OrderStatus.PENDING),
+    (OrderStatus.PROCESSING, OrderStatus.COMPLETED),
+    (OrderStatus.SHIPPED, OrderStatus.PENDING),
+    (OrderStatus.SHIPPED, OrderStatus.PROCESSING),
+    (OrderStatus.SHIPPED, OrderStatus.CANCELLED),
+    (OrderStatus.COMPLETED, OrderStatus.PENDING),
+    (OrderStatus.COMPLETED, OrderStatus.PROCESSING),
+    (OrderStatus.COMPLETED, OrderStatus.SHIPPED),
+    (OrderStatus.COMPLETED, OrderStatus.CANCELLED),
+    (OrderStatus.CANCELLED, OrderStatus.PENDING),
+    (OrderStatus.CANCELLED, OrderStatus.PROCESSING),
+    (OrderStatus.CANCELLED, OrderStatus.SHIPPED),
+    (OrderStatus.CANCELLED, OrderStatus.COMPLETED),
+]
+
+
+@pytest.mark.parametrize(("from_status", "to_status"), VALID_TRANSITION_PATHS)
+def test_valid_order_status_transitions(client, db, product, customer_headers, admin_headers, from_status, to_status):
+    add_to_cart(client, customer_headers, product, 1)
+    order_id = client.post(ORDERS_URL, headers=customer_headers).json()["id"]
+
+    # Reach `from_status` first
+    if from_status == OrderStatus.PROCESSING:
+        r = client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": "processing"}, headers=admin_headers)
+        assert r.status_code == 200
+    elif from_status == OrderStatus.SHIPPED:
+        client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": "processing"}, headers=admin_headers)
+        r = client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": "shipped"}, headers=admin_headers)
+        assert r.status_code == 200
+
+    # Perform the test transition
+    resp = client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": to_status.value}, headers=admin_headers)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == to_status.value
+
+
+@pytest.mark.parametrize(("from_status", "to_status"), INVALID_TRANSITIONS)
+def test_invalid_order_status_transitions(client, db, product, customer_headers, admin_headers, from_status, to_status):
+    add_to_cart(client, customer_headers, product, 1)
+    order_id = client.post(ORDERS_URL, headers=customer_headers).json()["id"]
+
+    # Reach `from_status` through valid path
+    if from_status in (OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.COMPLETED):
+        client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": "processing"}, headers=admin_headers)
+    if from_status in (OrderStatus.SHIPPED, OrderStatus.COMPLETED):
+        client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": "shipped"}, headers=admin_headers)
+    if from_status == OrderStatus.COMPLETED:
+        client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": "completed"}, headers=admin_headers)
+    if from_status == OrderStatus.CANCELLED:
+        client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": "cancelled"}, headers=admin_headers)
+
+    # Now attempt invalid transition
+    resp = client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": to_status.value}, headers=admin_headers)
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": f"Invalid order status transition: {from_status.value} -> {to_status.value}"}
+
+    # Verify the order status was not modified
+    order = client.get(f"/api/v1/orders/{order_id}", headers=customer_headers).json()
+    assert order["status"] == from_status.value
+
+
+def test_order_transition_nonexistent_order(client, admin_headers):
+    resp = client.patch("/api/v1/admin/orders/999999/status", json={"status": "processing"}, headers=admin_headers)
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Order not found"}
+
+
+def test_order_transition_unauthorized(client):
+    resp = client.patch("/api/v1/admin/orders/1/status", json={"status": "processing"})
+    assert resp.status_code == 401
+
+
+def test_order_transition_non_admin(client, product, customer_headers):
+    add_to_cart(client, customer_headers, product, 1)
+    order_id = client.post(ORDERS_URL, headers=customer_headers).json()["id"]
+
+    resp = client.patch(f"/api/v1/admin/orders/{order_id}/status", json={"status": "processing"}, headers=customer_headers)
+    assert resp.status_code == 403

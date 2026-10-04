@@ -54,7 +54,8 @@ export function orderLinesTable(order) {
 const orderCard = (order, open) => html`
   <details class="order-card" id="order-${order.id}" ${open ? html`open` : ""}>
     <summary>
-      <span class="order-card__id">Order #${order.id}<span class="order-card__date">${formatDateTime(order.created_at)}</span></span>
+      <span class="order-card__id">Order #${order.order_number || order.id}<span class="order-card__date">${formatDateTime(order.created_at)}</span></span>
+
       ${statusBadge(order.status)}
       <span class="muted">${plural(order.items.length, "item")}</span>
       <span class="price">${formatPrice(order.total_price)}</span>

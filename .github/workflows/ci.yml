@@ -120,9 +120,20 @@ jobs:
         run: pip install -r backend/requirements-dev.txt
 
       - name: Get PostgreSQL credentials
+        shell: bash
         run: |
           POSTGRES_USER=$(docker compose exec -T postgres printenv POSTGRES_USER | tr -d '\r')
           POSTGRES_DB=$(docker compose exec -T postgres printenv POSTGRES_DB | tr -d '\r')
+
+          if [ -z "$POSTGRES_USER" ]; then
+            echo "POSTGRES_USER is empty"
+            exit 1
+          fi
+
+          if [ -z "$POSTGRES_DB" ]; then
+            echo "POSTGRES_DB is empty"
+            exit 1
+          fi
 
           echo "POSTGRES_USER=${POSTGRES_USER}" >> "$GITHUB_ENV"
           echo "POSTGRES_DB=${POSTGRES_DB}" >> "$GITHUB_ENV"
@@ -131,26 +142,89 @@ jobs:
           echo "PostgreSQL database: ${POSTGRES_DB}"
 
       - name: Create E2E test database
+        shell: bash
         run: |
-          docker compose exec -T postgres \
+          if docker compose exec -T postgres \
             psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
             -tc "SELECT 1 FROM pg_database WHERE datname = 'arad_store_test'" \
-            | grep -q 1 \
-            || docker compose exec -T postgres \
+            | grep -q 1; then
+            echo "Database arad_store_test already exists."
+          else
+            echo "Creating database arad_store_test..."
+
+            docker compose exec -T postgres \
               psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
               -c "CREATE DATABASE arad_store_test"
 
+            echo "Database arad_store_test created."
+          fi
+
+      - name: Build E2E database URL
+        shell: bash
+        run: |
+          DATABASE_URL=$(docker compose exec -T backend printenv DATABASE_URL | tr -d '\r')
+
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is not set inside backend container"
+            exit 1
+          fi
+
+          E2E_DATABASE_URL=$(
+            printf '%s' "$DATABASE_URL" |
+            python3 -c '
+          import sys
+          from urllib.parse import urlsplit, urlunsplit
+
+          value = sys.stdin.read().strip()
+
+          if not value:
+              raise SystemExit("DATABASE_URL is empty")
+
+          url = urlsplit(value)
+
+          if not url.scheme:
+              raise SystemExit("DATABASE_URL has no scheme")
+
+          if not url.netloc:
+              raise SystemExit("DATABASE_URL has no host/netloc")
+
+          e2e_url = urlunsplit(
+              (
+                  url.scheme,
+                  url.netloc,
+                  "/arad_store_test",
+                  url.query,
+                  url.fragment,
+              )
+          )
+
+          print(e2e_url)
+          '
+          )
+
+          if [ -z "$E2E_DATABASE_URL" ]; then
+            echo "Failed to build E2E_DATABASE_URL"
+            exit 1
+          fi
+
+          echo "::add-mask::$E2E_DATABASE_URL"
+          echo "E2E_DATABASE_URL=${E2E_DATABASE_URL}" >> "$GITHUB_ENV"
+
+          echo "E2E database URL created successfully."
+
       - name: Run migrations for E2E test database
-        env:
-          DATABASE_URL: postgresql+psycopg://${{ env.POSTGRES_USER }}@127.0.0.1:5432/arad_store_test
-        working-directory: backend
-        run: alembic upgrade head
+        run: |
+          docker compose exec -T \
+            -e DATABASE_URL="$E2E_DATABASE_URL" \
+            backend \
+            alembic upgrade head
 
       - name: Seed E2E test database
-        env:
-          DATABASE_URL: postgresql+psycopg://${{ env.POSTGRES_USER }}@127.0.0.1:5432/arad_store_test
-        working-directory: backend
-        run: python -m app.seed
+        run: |
+          docker compose exec -T \
+            -e DATABASE_URL="$E2E_DATABASE_URL" \
+            backend \
+            python -m app.seed
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

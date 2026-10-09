@@ -10,9 +10,11 @@ import {
   formatPrice,
   html,
   imageUrl,
+  isImageSource,
   loadingState,
   mount,
   openDialog,
+  placeholderImage,
   raw,
   renderError,
   renderPagination,
@@ -78,8 +80,19 @@ const formContent = (product, categories) => html`
       </div>
       <div class="field">
         <label for="product-image">Image URL</label>
-        <input class="input" id="product-image" name="image_url" maxlength="500" placeholder="https://example.com/photo.jpg or /img/products/name.svg" value="${product?.image_url ?? ""}" />
-        <span class="field__hint">A link to an image. Leave empty to show a placeholder.</span>
+        <input class="input" id="product-image" name="image_url" maxlength="500" autocomplete="off"
+          placeholder="https://example.com/photo.jpg or /images/products/cpu/name.svg"
+          value="${product?.image_url ?? ""}" aria-describedby="product-image-hint product-image-preview-status"
+          data-image-input />
+        <span class="field__hint" id="product-image-hint">
+          A link to an image (http, https or a path on this site). Leave empty to show a placeholder.
+        </span>
+        <div class="image-preview" data-image-preview aria-live="polite">
+          <div class="image-preview__frame" data-media>
+            <img class="image-preview__img" alt="Preview of the product image" data-image-frame data-no-fallback />
+          </div>
+          <span class="image-preview__status" id="product-image-preview-status" data-image-status hidden></span>
+        </div>
       </div>
       <div class="field">
         <label for="product-description">Description</label>
@@ -95,6 +108,62 @@ const formContent = (product, categories) => html`
       <button type="submit" class="btn btn--primary">${product ? "Save changes" : "Create product"}</button>
     </div>
   </form>`;
+
+/**
+ * Live preview of the image the admin just typed. Kept deliberately separate from
+ * the global `watchImages` fallback: here we also want to tell the admin *why*
+ * nothing is showing, and to catch values the API would reject.
+ */
+function wireImagePreview(form) {
+  const input = form.querySelector("[data-image-input]");
+  const box = form.querySelector("[data-image-preview]");
+  const img = box.querySelector("[data-image-frame]");
+  const status = box.querySelector("[data-image-status]");
+  let token = 0; // guards against an older request settling after a newer one
+
+  const say = (message) => {
+    status.textContent = message;
+    status.hidden = !message;
+  };
+
+  function refresh() {
+    const current = ++token;
+    const value = input.value.trim();
+    box.classList.remove("is-loaded", "is-failed");
+    say("");
+    img.removeAttribute("src"); // stop the previous image from flashing in the new preview
+    img.alt = "Preview of the product image";
+
+    if (!value) {
+      img.src = placeholderImage();
+      img.alt = "No image: a placeholder will be shown in the store";
+      box.classList.add("is-loaded");
+      say("No image set: the store will show the placeholder.");
+      return;
+    }
+    if (!isImageSource(value)) {
+      box.classList.add("is-failed");
+      say("Not a usable image link. Start it with http://, https:// or /.");
+      return;
+    }
+
+    img.onload = () => {
+      if (current !== token) return;
+      box.classList.add("is-loaded");
+      say("Image looks good.");
+    };
+    img.onerror = () => {
+      if (current !== token) return;
+      box.classList.add("is-failed");
+      img.removeAttribute("src");
+      say("This image could not be loaded. Check the link.");
+    };
+    img.src = imageUrl(value);
+  }
+
+  input.addEventListener("input", debounce(refresh, 300));
+  refresh();
+}
 
 function readForm(form) {
   const data = new FormData(form);
@@ -190,6 +259,7 @@ export function renderProducts(view) {
     }
     const dialog = openDialog({ title: product ? "Edit product" : "Add product", content: formContent(product, categories) });
     const form = dialog.querySelector("form");
+    wireImagePreview(form);
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       clearFormErrors(form);

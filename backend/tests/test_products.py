@@ -227,6 +227,44 @@ def test_site_relative_image_paths_are_accepted(client, category, admin_headers)
     assert response.json()["image_url"] == "/img/products/x.svg"
 
 
+def test_image_url_is_returned_by_read(client, category, admin_headers):
+    created = client.post(
+        PRODUCTS_URL, json=new_product_payload(category, image_url="/images/products/gpu/card.svg"), headers=admin_headers
+    ).json()
+
+    assert created["image_url"] == "/images/products/gpu/card.svg"
+    assert client.get(PRODUCTS_URL).json()["items"][0]["image_url"] == "/images/products/gpu/card.svg"
+    assert client.get(f"{PRODUCTS_URL}/{created['id']}").json()["image_url"] == "/images/products/gpu/card.svg"
+
+
+def test_patch_can_clear_the_image_url(client, admin_headers, product):
+    response = client.patch(f"{PRODUCTS_URL}/{product.id}", json={"image_url": ""}, headers=admin_headers)
+
+    assert response.status_code == 200
+    assert response.json()["image_url"] is None
+
+
+def test_patch_can_set_the_image_url(client, admin_headers, product):
+    response = client.patch(
+        f"{PRODUCTS_URL}/{product.id}", json={"image_url": "https://cdn.example.com/p.jpg"}, headers=admin_headers
+    )
+
+    assert response.json()["image_url"] == "https://cdn.example.com/p.jpg"
+
+
+def test_patch_rejects_an_unsafe_image_url(client, admin_headers, product):
+    response = client.patch(f"{PRODUCTS_URL}/{product.id}", json={"image_url": "javascript:alert(1)"}, headers=admin_headers)
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "image_url"]
+
+
+def test_over_long_image_url_is_rejected(client, category, admin_headers):
+    response = client.post(PRODUCTS_URL, json=new_product_payload(category, image_url="/x" * 300), headers=admin_headers)
+
+    assert response.status_code == 422
+
+
 def test_admin_create_product_generates_unique_slugs(client, category, admin_headers):
     payload = new_product_payload(category, name="Same Name")
 

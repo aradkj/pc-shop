@@ -26,6 +26,7 @@ def _lock_products(db: Session, product_ids: Iterable[int]) -> dict[int, Product
     stmt = (
         select(Product)
         .where(Product.id.in_(set(product_ids)))
+        .options(selectinload(Product.category))
         .order_by(Product.id)
         .with_for_update()
         .execution_options(populate_existing=True)
@@ -65,6 +66,8 @@ def generate_order_number(db: Session) -> str:
 
 
 def _build_order(db: Session, user: User, order_number: str | None = None) -> Order:
+    from app.services.pc_builder_service import CORE_BUILD_CATEGORIES, normalize_category_slug
+
     # 1. Lock the cart first: a double-clicked "Checkout" serializes here and the
     #    second request finds an empty cart instead of creating a duplicate order.
     cart = db.scalars(select(Cart).where(Cart.user_id == user.id).with_for_update()).one_or_none()
@@ -83,6 +86,7 @@ def _build_order(db: Session, user: User, order_number: str | None = None) -> Or
         order_number=order_number or generate_order_number(db),
         status=OrderStatus.PENDING,
         total_price=Decimal("0.00"),
+        discount_amount=Decimal("0.00"),
     )
 
     total = Decimal("0.00")
@@ -107,7 +111,24 @@ def _build_order(db: Session, user: User, order_number: str | None = None) -> Or
         )
         product.stock -= cart_item.quantity
         total += subtotal
-    order.total_price = total
+
+    # 5% Build Your Own PC discount if all 8 core categories are present
+    categories_present = {
+        normalize_category_slug(products[item.product_id].category.slug)
+        for item in cart_items
+        if products[item.product_id].category is not None
+    }
+    discount = Decimal("0.00")
+    if CORE_BUILD_CATEGORIES.issubset(categories_present):
+        build_subtotal = Decimal("0.00")
+        for cart_item in cart_items:
+            prod = products[cart_item.product_id]
+            if prod.category and normalize_category_slug(prod.category.slug) in CORE_BUILD_CATEGORIES:
+                build_subtotal += prod.price * cart_item.quantity
+        discount = (build_subtotal * Decimal("0.05")).quantize(Decimal("0.01"))
+
+    order.discount_amount = discount
+    order.total_price = max(Decimal("0.00"), total - discount)
 
     # 4. Persist the order and empty the cart (committed by the caller).
     db.add(order)

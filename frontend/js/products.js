@@ -30,10 +30,17 @@ const MAX_QUANTITY = 100; // mirrors the API limit per cart line
 
 // Decorative icons for the well-known categories; any other category gets a generic tag.
 const CATEGORY_ICONS = {
+  cpu: "cpu",
+  gpu: "gpu",
+  ram: "memory",
+  motherboard: "motherboard",
+  storage: "storage",
+  psu: "psu",
+  "pc-case": "case",
+  cooler: "cooler",
   "graphics-cards": "gpu",
   processors: "cpu",
   memory: "memory",
-  storage: "storage",
   "gaming-accessories": "mouse",
 };
 
@@ -50,8 +57,9 @@ function productCard(product) {
   const unavailable = !product.is_active || product.stock <= 0;
   return html`
     <article class="product-card">
-      <a class="product-card__media" href="${detailUrl}" tabindex="-1" aria-hidden="true">
-        <img src="${imageUrl(product.image_url)}" alt="${product.name}" loading="lazy" />
+      <a class="product-card__media" data-media href="${detailUrl}" tabindex="-1" aria-hidden="true">
+        <img class="product-card__img" src="${imageUrl(product.image_url)}" alt="${product.name}"
+          loading="lazy" decoding="async" width="320" height="240" />
       </a>
       <div class="product-card__body">
         <p class="product-card__meta">
@@ -249,6 +257,21 @@ export async function initProductsPage() {
 // Product detail page
 // ---------------------------------------------------------------------------
 
+function renderSpecifications(specs) {
+  if (!specs || typeof specs !== "object" || Object.keys(specs).length === 0) return "";
+  const formatKey = (key) => key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const formatVal = (val) => (typeof val === "boolean" ? (val ? "Yes" : "No") : String(val ?? "—"));
+  return html`
+    <div class="product-specs">
+      <h2>Technical Specifications</h2>
+      <dl class="specs-list">
+        ${Object.entries(specs).map(
+          ([k, v]) => html`<div class="spec-row"><dt>${formatKey(k)}</dt><dd>${formatVal(v)}</dd></div>`,
+        )}
+      </dl>
+    </div>`;
+}
+
 function productView(product) {
   const stock = stockInfo(product);
   const unavailable = !product.is_active || product.stock <= 0;
@@ -263,8 +286,9 @@ function productView(product) {
       </ol>
     </nav>
     <div class="product-detail">
-      <div class="product-detail__media">
-        <img src="${imageUrl(product.image_url)}" alt="${product.name}" />
+      <div class="product-detail__media" data-media>
+        <img class="product-detail__img" src="${imageUrl(product.image_url)}" alt="${product.name}"
+          decoding="async" fetchpriority="high" width="800" height="800" />
       </div>
       <div>
         <div class="product-detail__meta">
@@ -284,6 +308,7 @@ function productView(product) {
           </div>
           <button type="button" class="btn btn--primary" data-add ${unavailable ? raw("disabled") : ""}>${unavailable ? "Sold out" : "Add to cart"}</button>
         </div>
+        ${product.specifications ? renderSpecifications(product.specifications) : ""}
       </div>
     </div>`;
 }

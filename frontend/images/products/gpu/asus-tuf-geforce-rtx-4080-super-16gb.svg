@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-labelledby="t">
+  <title id="t">ASUS TUF Gaming GeForce RTX 4080 Super 16GB</title>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#121620"/>
+      <stop offset="100%" stop-color="#0a0c11"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <rect x="8" y="8" width="384" height="284" rx="16" fill="none" stroke="#1f2637" stroke-width="2"/>
+
+  <!-- Category Artwork -->
+  <g>
+    
+        <rect x="60" y="65" width="280" height="120" rx="12" fill="#151a24" stroke="#2a354c" stroke-width="3"/>
+        <rect x="42" y="75" width="18" height="100" rx="3" fill="#1c2333" stroke="#9aa5bb" stroke-width="2"/>
+        <circle cx="130" cy="125" r="42" fill="#1c2333" stroke="#19e3c0" stroke-width="2.5"/>
+        <circle cx="130" cy="125" r="10" fill="#19e3c0"/>
+        <circle cx="250" cy="125" r="42" fill="#1c2333" stroke="#19e3c0" stroke-width="2.5"/>
+        <circle cx="250" cy="125" r="10" fill="#19e3c0"/>
+        <path d="M80 185 L320 185" stroke="#19e3c0" stroke-width="3" stroke-dasharray="8 4"/>
+    
+  </g>
+
+  <!-- Product Labels -->
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" text-anchor="middle">
+    <rect x="24" y="24" width="70" height="22" rx="4" fill="#1c2333" stroke="#2a354c"/>
+    <text x="59" y="39" font-size="11" font-weight="700" fill="#19e3c0" letter-spacing="1.5">GPU</text>
+
+    <text x="200" y="248" font-size="13" font-weight="700" fill="#19e3c0" letter-spacing="2">ASUS</text>
+    <text x="200" y="272" font-size="15" font-weight="600" fill="#eceff6">ASUS TUF Gaming GeForce RTX 4080 S…</text>
+  </g>
+</svg>

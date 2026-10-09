@@ -10,7 +10,7 @@ import { api, onUnauthorized } from "./api.js";
 import { isLoggedIn, logout, redirectToLogin } from "./auth.js";
 import { getCartCount, refreshCartBadge, setCartBadge } from "./cart.js";
 import { clearSession, getStoredUser, setStoredUser, takeFlash } from "./session.js";
-import { errorState, html, icon, mount, placeholderImage, raw, siteUrl, toast } from "./ui.js";
+import { errorState, html, icon, mount, raw, siteUrl, toast, watchImages } from "./ui.js";
 
 const PAGE = document.body.dataset.page;
 
@@ -29,6 +29,7 @@ const PAGES = {
   cart: async () => (await import("./cart.js")).initCartPage(),
   orders: async () => (await import("./orders.js")).initOrdersPage(),
   admin: async () => (await import("./admin.js")).initAdminPage(),
+  "pc-builder": async () => (await import("./pc-builder.js")).initPcBuilderPage(),
 };
 
 // ---------------------------------------------------------------------------
@@ -39,6 +40,7 @@ function navLinks(user) {
   const links = [
     { key: "home", label: "Home", href: "index.html" },
     { key: "products", label: "Shop", href: "pages/products.html" },
+    { key: "pc-builder", label: "Build Your PC", href: "pages/pc-builder.html" },
   ];
   if (isLoggedIn()) links.push({ key: "orders", label: "My orders", href: "pages/orders.html" });
   if (user?.role === "admin") links.push({ key: "admin", label: "Admin", href: "pages/admin.html" });
@@ -131,18 +133,8 @@ function wireGlobalListeners() {
     if (event.matches) setMenuOpen(false);
   });
 
-  // A product image that fails to load is replaced by the placeholder (error events do not bubble: capture them).
-  document.addEventListener(
-    "error",
-    (event) => {
-      const image = event.target;
-      if (image instanceof HTMLImageElement && !image.dataset.fallback) {
-        image.dataset.fallback = "true";
-        image.src = placeholderImage();
-      }
-    },
-    true,
-  );
+  // Product images fall back to the placeholder and reveal themselves when loaded.
+  watchImages();
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +154,7 @@ function renderFooter() {
           <h2>Shop</h2>
           <ul>
             <li><a href="${siteUrl("pages/products.html")}">All products</a></li>
+            <li><a href="${siteUrl("pages/pc-builder.html")}">Build Your PC</a></li>
             <li><a href="${siteUrl("pages/cart.html")}">Cart</a></li>
             <li><a href="${siteUrl("pages/orders.html")}">My orders</a></li>
           </ul>

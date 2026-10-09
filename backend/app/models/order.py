@@ -34,6 +34,7 @@ class Order(Base):
     __tablename__ = "orders"
     __table_args__ = (
         CheckConstraint("total_price >= 0", name="total_price_non_negative"),
+        CheckConstraint("discount_amount >= 0", name="discount_amount_non_negative"),
         enum_check_constraint("status", OrderStatus, name="status_valid"),
     )
 
@@ -42,6 +43,9 @@ class Order(Base):
     # RESTRICT: a user with orders can be deactivated but never hard-deleted.
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     total_price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), default=Decimal("0.00"), server_default="0.00"
+    )
     status: Mapped[OrderStatus] = mapped_column(
         enum_column_type(OrderStatus, "order_status"),
         default=OrderStatus.PENDING,

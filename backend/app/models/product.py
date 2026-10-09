@@ -1,8 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, Text, func, true
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, JSON, Numeric, String, Text, func, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -30,6 +30,7 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(200), index=True)
     slug: Mapped[str] = mapped_column(String(220), unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text)
+    specifications: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     # Numeric (never float) so money arithmetic is exact.
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     stock: Mapped[int] = mapped_column(default=0, server_default="0")

@@ -58,6 +58,14 @@ def test_interactive_docs_and_openapi_schema(client):
     assert schema["info"]["title"] == "Arad Store API"
     assert "/api/v1/auth/login" in schema["paths"]
     assert "OAuth2PasswordBearer" in schema["components"]["securitySchemes"]
+    assert "jsdelivr" not in docs.text
+    assert "/static/swagger-ui/swagger-ui-bundle.js" in docs.text
+    assert "/static/swagger-ui/swagger-ui.css" in docs.text
+    assert "/static/swagger-ui/favicon.png" in docs.text
+
+    assert client.get("/static/swagger-ui/swagger-ui-bundle.js").status_code == 200
+    assert client.get("/static/swagger-ui/swagger-ui.css").status_code == 200
+    assert client.get("/static/swagger-ui/favicon.png").status_code == 200
 
 
 # ------------------------------------------------------------------------------ CORS

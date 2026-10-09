@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-labelledby="t">
+  <title id="t">Scythe Fuma 3 Dual Tower CPU Cooler</title>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#121620"/>
+      <stop offset="100%" stop-color="#0a0c11"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <rect x="8" y="8" width="384" height="284" rx="16" fill="none" stroke="#1f2637" stroke-width="2"/>
+
+  <!-- Category Artwork -->
+  <g>
+    
+        <rect x="115" y="60" width="170" height="140" rx="10" fill="#151a24" stroke="#2a354c" stroke-width="2.5"/>
+        <path d="M125 60 v140 M145 60 v140 M165 60 v140 M185 60 v140 M205 60 v140 M225 60 v140 M245 60 v140 M265 60 v140 M275 60 v140" stroke="#2a354c" stroke-width="1.5"/>
+        <circle cx="200" cy="130" r="46" fill="#1c2333" stroke="#19e3c0" stroke-width="2.5"/>
+        <circle cx="200" cy="130" r="12" fill="#19e3c0"/>
+        <path d="M160 200 C 160 230, 240 230, 240 200" fill="none" stroke="#9aa5bb" stroke-width="4"/>
+    
+  </g>
+
+  <!-- Product Labels -->
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" text-anchor="middle">
+    <rect x="24" y="24" width="70" height="22" rx="4" fill="#1c2333" stroke="#2a354c"/>
+    <text x="59" y="39" font-size="11" font-weight="700" fill="#19e3c0" letter-spacing="1.5">COOLER</text>
+
+    <text x="200" y="248" font-size="13" font-weight="700" fill="#19e3c0" letter-spacing="2">SCYTHE</text>
+    <text x="200" y="272" font-size="15" font-weight="600" fill="#eceff6">Scythe Fuma 3 Dual Tower CPU Cooler</text>
+  </g>
+</svg>

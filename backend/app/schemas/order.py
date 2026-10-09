@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -27,6 +28,7 @@ class OrderRead(BaseModel):
     order_number: str
     status: OrderStatus
     total_price: Money
+    discount_amount: Money = Decimal("0.00")
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemRead]

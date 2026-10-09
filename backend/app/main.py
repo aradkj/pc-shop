@@ -3,9 +3,15 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import (
+    get_swagger_ui_html,
+    get_swagger_ui_oauth2_redirect_html,
+)
+from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api.router import api_router
@@ -34,6 +40,7 @@ TAGS_METADATA = [
     {"name": "Cart", "description": "The authenticated user's shopping cart."},
     {"name": "Orders", "description": "Checkout and order history of the authenticated user."},
     {"name": "Admin", "description": "Admin-only: dashboard stats, all orders, users."},
+    {"name": "PC Builder", "description": "Build Your Own PC: compatibility checks, recommendations, and pricing."},
     {"name": "Health", "description": "Liveness and readiness probes."},
 ]
 
@@ -49,6 +56,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Arad Store API stopped")
 
 
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
@@ -59,7 +69,26 @@ def create_app() -> FastAPI:
         description=DESCRIPTION,
         openapi_tags=TAGS_METADATA,
         lifespan=lifespan,
+        docs_url=None,
     )
+    if STATIC_DIR.is_dir():
+        app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.api_route("/docs", methods=["GET", "HEAD"], include_in_schema=False)
+    async def custom_swagger_ui_html():
+        return get_swagger_ui_html(
+            openapi_url=app.openapi_url or "/openapi.json",
+            title=f"{app.title} - Swagger UI",
+            oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+            swagger_js_url="/static/swagger-ui/swagger-ui-bundle.js",
+            swagger_css_url="/static/swagger-ui/swagger-ui.css",
+            swagger_favicon_url="/static/swagger-ui/favicon.png",
+        )
+
+    if app.swagger_ui_oauth2_redirect_url:
+        @app.api_route(app.swagger_ui_oauth2_redirect_url, methods=["GET", "HEAD"], include_in_schema=False)
+        async def swagger_ui_redirect():
+            return get_swagger_ui_oauth2_redirect_html()
     # Allow credentials so HttpOnly cookies are supported across configured origins.
     app.add_middleware(
         CORSMiddleware,

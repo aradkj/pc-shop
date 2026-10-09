@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from sqlalchemy import func, select
 
@@ -6,6 +8,11 @@ from app.models import Category, Order, OrderItem, OrderStatus, Product, User, U
 
 ADMIN_PASSWORD = "Seed-Admin-Pw-123"
 CUSTOMER_PASSWORD = "Seed-Customer-Pw-123"
+
+
+@pytest.fixture(scope="session")
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -21,19 +28,36 @@ def count(db, model):
 def test_seed_creates_the_documented_data(seed_passwords, db):
     assert seed.main() == 0
 
-    assert count(db, Category) == 5
-    assert 15 <= count(db, Product) <= 20
+    assert count(db, Category) == 8
+    assert count(db, Product) == 80
     assert count(db, User) == 4
     assert db.scalar(select(func.count()).select_from(User).where(User.role == UserRole.ADMIN)) == 1
     assert {c.name for c in db.scalars(select(Category))} == {
-        "Graphics Cards",
-        "Processors",
-        "Memory",
+        "CPU",
+        "GPU",
+        "RAM",
+        "Motherboard",
         "Storage",
-        "Gaming Accessories",
+        "PSU",
+        "PC Case",
+        "Cooler",
     }
-    assert db.scalar(select(func.count()).select_from(Product).where(Product.stock == 0)) >= 1  # a sold-out product
-    assert db.scalar(select(func.count()).select_from(Product).where(Product.is_active.is_(False))) >= 1
+    # Verify stock values are within the required range (5 to 50)
+    for product in db.scalars(select(Product)):
+        assert 5 <= product.stock <= 50, f"Product {product.name} stock {product.stock} not between 5 and 50"
+        # Every seeded product points at a real file, or the store shows a placeholder.
+        assert product.image_url == f"/images/products/{product.category.slug}/{product.slug}.svg"
+
+
+def test_seeded_images_exist_on_disk(seed_passwords, db, repo_root):
+    seed.main()
+
+    missing = [
+        product.image_url
+        for product in db.scalars(select(Product))
+        if not (Path(repo_root) / "frontend" / product.image_url.lstrip("/")).is_file()
+    ]
+    assert missing == [], f"seeded products reference missing image files: {missing[:5]}"
 
 
 def test_seeded_accounts_can_log_in_with_the_configured_passwords(seed_passwords, client):

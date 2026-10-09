@@ -92,8 +92,9 @@ function cartItemRow(item) {
   const stock = stockInfo(product);
   return html`
     <li class="cart-item" data-item-id="${item.id}">
-      <a class="cart-item__media" href="${siteUrl("pages/product.html")}?slug=${product.slug || product.id}" tabindex="-1" aria-hidden="true">
-        <img src="${imageUrl(product.image_url)}" alt="${product.name}" loading="lazy" />
+      <a class="cart-item__media" data-media href="${siteUrl("pages/product.html")}?slug=${product.slug || product.id}" tabindex="-1" aria-hidden="true">
+        <img class="cart-item__img" src="${imageUrl(product.image_url)}" alt="${product.name}" loading="lazy"
+          decoding="async" width="160" height="160" />
       </a>
       <div>
         <h2 class="cart-item__title"><a href="${siteUrl("pages/product.html")}?slug=${product.slug || product.id}">${product.name}</a></h2>

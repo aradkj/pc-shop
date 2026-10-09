@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-labelledby="t">
+  <title id="t">AMD Ryzen 5 5600X</title>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#121620"/>
+      <stop offset="100%" stop-color="#0a0c11"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <rect x="8" y="8" width="384" height="284" rx="16" fill="none" stroke="#1f2637" stroke-width="2"/>
+
+  <!-- Category Artwork -->
+  <g>
+    
+        <rect x="110" y="35" width="180" height="180" rx="14" fill="#151a24" stroke="#2a354c" stroke-width="3"/>
+        <rect x="135" y="60" width="130" height="130" rx="8" fill="#1c2333" stroke="#19e3c0" stroke-width="2"/>
+        <path d="M110 55 L130 35" stroke="#19e3c0" stroke-width="2"/>
+        <rect x="160" y="85" width="80" height="80" rx="4" fill="#10131a" stroke="#2a354c"/>
+    
+  </g>
+
+  <!-- Product Labels -->
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" text-anchor="middle">
+    <rect x="24" y="24" width="70" height="22" rx="4" fill="#1c2333" stroke="#2a354c"/>
+    <text x="59" y="39" font-size="11" font-weight="700" fill="#19e3c0" letter-spacing="1.5">CPU</text>
+
+    <text x="200" y="248" font-size="13" font-weight="700" fill="#19e3c0" letter-spacing="2">AMD</text>
+    <text x="200" y="272" font-size="15" font-weight="600" fill="#eceff6">AMD Ryzen 5 5600X</text>
+  </g>
+</svg>

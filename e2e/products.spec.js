@@ -34,15 +34,15 @@ test.describe('Products and Search', () => {
     await page.click('button[type="submit"]');
 
     // Wait for results
-    await expect(page.locator('.product-card')).toHaveCount(2);
+    await expect(page.locator('.product-card')).toHaveCount(5);
     await expect(page.locator('.product-card').first()).toContainText('Ryzen');
   });
 
   test('category filter updates results', async ({ page }) => {
     await page.goto('/pages/products.html');
 
-    // Select category Graphics Cards
-    await page.selectOption('#filter-category', { label: 'Graphics Cards' });
+    // Select category GPU
+    await page.selectOption('#filter-category', { label: 'GPU' });
     await page.click('button[type="submit"]');
 
     // Verify cards are GPUs

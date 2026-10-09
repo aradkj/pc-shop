@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
@@ -48,6 +48,7 @@ class ProductCreate(BaseModel):
     name: ProductName
     slug: ProductSlug | None = Field(default=None, description="Generated from the name when omitted")
     description: str | None = Field(default=None, max_length=5000)
+    specifications: dict[str, Any] | None = None
     price: PriceInput
     stock: int = Field(default=0, ge=0, le=MAX_STOCK)
     brand: Brand | None = None
@@ -64,6 +65,7 @@ class ProductUpdate(BaseModel):
     name: ProductName | None = None
     slug: ProductSlug | None = None
     description: str | None = Field(default=None, max_length=5000)
+    specifications: dict[str, Any] | None = None
     price: PriceInput | None = None
     stock: int | None = Field(default=None, ge=0, le=MAX_STOCK)
     brand: Brand | None = None
@@ -88,6 +90,7 @@ class ProductRead(BaseModel):
     name: str
     slug: str
     description: str | None
+    specifications: dict[str, Any] | None = None
     price: Money
     stock: int
     image_url: str | None

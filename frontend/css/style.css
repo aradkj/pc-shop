@@ -723,9 +723,11 @@ fieldset {
   background: radial-gradient(circle at 50% 40%, var(--surface-3), var(--surface) 70%);
 }
 
-.product-detail__media img {
+.product-detail__img {
   width: 82%;
   height: 82%;
+  /* `contain` keeps the whole product visible; the 1:1 box reserves the space up
+     front, so the page never shifts once the image arrives. */
   object-fit: contain;
 }
 
@@ -756,6 +758,48 @@ fieldset {
   gap: 1rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--border);
+}
+
+.product-specs {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.product-specs h2 {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.specs-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.spec-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0.85rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+
+.spec-row dt {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.spec-row dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
 }
 
 /* ---------- Cart & checkout ---------- */

@@ -55,6 +55,51 @@ export function imageUrl(url) {
   return siteUrl(url.replace(/^\/+/, ""));
 }
 
+/**
+ * True for the values the API accepts for `image_url`: an http(s) link or a path
+ * served by this site. Kept in sync with `_validate_image_url` on the backend so
+ * the admin form can complain before a round trip instead of after it.
+ */
+export const isImageSource = (value) => typeof value === "string" && /^(https?:\/\/|\/(?![/\\]))/i.test(value.trim());
+
+/**
+ * Media boxes carry `data-media`, and this swaps the shimmer for the picture:
+ *
+ * - `load`  -> `is-loaded`, the image is on screen;
+ * - `error` -> `is-failed` (stop the shimmer) plus a one-shot swap to the placeholder.
+ *
+ * `load` and `error` do not bubble, so a single capturing listener on `document`
+ * covers the first paint and every image mounted later (grids, dialogs).
+ * `dataset.fallback` makes the swap one-shot, so a dead URL can never loop, and
+ * `data-no-fallback` opts an image out (the admin preview wants to report the
+ * error to the person typing rather than silently showing a placeholder).
+ */
+export function watchImages(root = document) {
+  const settle = (image, state) => image.closest("[data-media]")?.classList.add(`is-${state}`);
+
+  root.addEventListener(
+    "load",
+    (event) => {
+      if (event.target instanceof HTMLImageElement) settle(event.target, "loaded");
+    },
+    true,
+  );
+
+  root.addEventListener(
+    "error",
+    (event) => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement)) return;
+      settle(image, "failed");
+      if (image.dataset.noFallback !== undefined) return; // the owner reports the failure itself
+      if (image.dataset.fallback) return;
+      image.dataset.fallback = "true";
+      image.src = placeholderImage();
+    },
+    true,
+  );
+}
+
 /** Only allow redirects to paths on this site (prevents open redirects through ?next=). */
 export function safeNext(candidate, fallback) {
   const isLocalPath = typeof candidate === "string" && /^\/(?![/\\])/.test(candidate);
@@ -107,6 +152,10 @@ const ICON_PATHS = {
   cpu: '<rect x="6" y="6" width="12" height="12" rx="1.5"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
   memory: '<rect x="2" y="6" width="20" height="9" rx="1.5"/><path d="M6 9.5v2.5M10 9.5v2.5M14 9.5v2.5M18 9.5v2.5M5 15v3M9 15v3M13 15v3M17 15v3"/>',
   storage: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 12h18M7 15.5h.01M11 15.5h6"/>',
+  motherboard: '<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="6" y="6" width="6" height="6"/><path d="M15 6h3M15 9h3M15 12h3M6 15h5M6 18h5M15 16v2M18 16v2"/>',
+  psu: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="10" cy="12" r="4"/><path d="M17 8h1M17 12h1M17 16h1M8 12l2-2v4l2-2"/>',
+  case: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M5 6h14M16 4h1M9 10h6M9 14h6M9 18h6"/>',
+  cooler: '<circle cx="12" cy="12" r="8"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M6.3 17.7l2.8-2.8M14.9 9.1l2.8-2.8"/><circle cx="12" cy="12" r="2.5"/>',
   mouse: '<rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 2v7M6 9h12"/>',
   tag: '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',
 };

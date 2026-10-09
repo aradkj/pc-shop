@@ -56,4 +56,12 @@ test.describe('Accessibility Audits (axe-core)', () => {
       .analyze();
     expect(accessibilityScanResults.violations).toEqual([]);
   });
+
+  test('pc builder page passes accessibility checks', async ({ page }) => {
+    await page.goto('/pages/pc-builder.html');
+    await page.waitForLoadState('networkidle');
+    const accessibilityScanResults = await new AxeBuilder({ page })
+      .analyze();
+    expect(accessibilityScanResults.violations).toEqual([]);
+  });
 });

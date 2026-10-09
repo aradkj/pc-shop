@@ -284,7 +284,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          file: Dockerfile
+          file: ./backend/Dockerfile
           push: true
           build-args: |
             INSTALL_DEV=false

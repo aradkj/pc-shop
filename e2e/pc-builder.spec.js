@@ -158,12 +158,12 @@ test.describe('PC Builder Flow', () => {
     // 7. PC Case: Montech AIR 903 BASE Black ($65.99)
     await page.locator('[data-choose-slot="pc-case"]').click();
     await page.locator('input[data-search-slot="pc-case"]').fill('AIR 903 BASE');
-    await page.locator('[data-picker-slot="pc-case"] [data-action="select-product"]').first().click();
+    await page.locator('[data-picker-slot="pc-case"] [data-product-card]:visible [data-action="select-product"]').first().click();
 
     // 8. Cooler: Thermalright Peerless Assassin 120 SE ($34.99)
     await page.locator('[data-choose-slot="cooler"]').click();
     await page.locator('input[data-search-slot="cooler"]').fill('Peerless Assassin');
-    await page.locator('[data-picker-slot="cooler"] [data-action="select-product"]').first().click();
+    await page.locator('[data-picker-slot="cooler"] [data-product-card]:visible [data-action="select-product"]').first().click();
 
     // Verify 8 of 8 selected
     const summary = page.locator('[data-build-summary]');

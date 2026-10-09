@@ -666,6 +666,7 @@ export async function initPcBuilderPage() {
           const brand = (card.querySelector(".builder-card__brand")?.textContent || "").toLowerCase();
           const matches = !query || title.includes(query) || brand.includes(query);
           card.style.display = matches ? "" : "none";
+          card.hidden = !matches;
           if (matches) visibleCount++;
         });
         const countEl = picker.querySelector(".builder-picker__count");

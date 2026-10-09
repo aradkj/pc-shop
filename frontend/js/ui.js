@@ -75,7 +75,12 @@ export const isImageSource = (value) => typeof value === "string" && /^(https?:\
  * error to the person typing rather than silently showing a placeholder).
  */
 export function watchImages(root = document) {
-  const settle = (image, state) => image.closest("[data-media]")?.classList.add(`is-${state}`);
+  const settle = (image, state) => {
+    const media = image.closest("[data-media]");
+    if (!media) return;
+    if (state === "loaded") media.classList.remove("is-failed");
+    media.classList.add(`is-${state}`);
+  };
 
   root.addEventListener(
     "load",
@@ -92,7 +97,7 @@ export function watchImages(root = document) {
       if (!(image instanceof HTMLImageElement)) return;
       settle(image, "failed");
       if (image.dataset.noFallback !== undefined) return; // the owner reports the failure itself
-      if (image.dataset.fallback) return;
+      if (image.dataset.fallback || image.src.endsWith("placeholder.svg")) return;
       image.dataset.fallback = "true";
       image.src = placeholderImage();
     },

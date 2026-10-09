@@ -131,6 +131,8 @@ function wireImagePreview(form) {
     const value = input.value.trim();
     box.classList.remove("is-loaded", "is-failed");
     say("");
+    img.onload = null;
+    img.onerror = null;
     img.removeAttribute("src"); // stop the previous image from flashing in the new preview
     img.alt = "Preview of the product image";
 

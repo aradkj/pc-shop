@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Log in · Arad Store</title>
-  <meta name="description" content="Log in to your Arad Store account." />
+  <meta name="description" content="Authenticate to your Arad Store account to access your cart, telemetry and custom PC builds." />
   <meta name="color-scheme" content="dark" />
-  <meta name="theme-color" content="#0a0c11" />
+  <meta name="theme-color" content="#090a0f" />
   <link rel="icon" href="../img/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="../css/style.css" />
   <link rel="stylesheet" href="../css/components.css" />
@@ -22,40 +22,43 @@
 
     <div class="container auth">
       <div class="auth__card">
-        <h1>Welcome back</h1>
-        <p>Log in to use your cart and see your orders.</p>
+        <span class="hero__eyebrow auth__eyebrow">Access Control // Terminal</span>
+        <h1>Welcome Back</h1>
+        <p>Authenticate with your credentials to manage your cart, orders and custom PC configurations.</p>
         <form id="login-form">
           <div data-form-alert role="alert" hidden></div>
           <div class="field">
-            <label for="identifier">Email or username</label>
-            <input class="input" id="identifier" name="identifier" type="text" autocomplete="username" required />
+            <label for="identifier">Email or Username</label>
+            <input class="input" id="identifier" name="identifier" type="text" autocomplete="username" placeholder="user@domain.com or handle" required />
           </div>
           <div class="field">
             <label for="password">Password</label>
-            <input class="input" id="password" name="password" type="password" autocomplete="current-password" required />
+            <input class="input" id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••••••" required />
           </div>
           <div class="field">
-            <label class="check"><input type="checkbox" name="remember" /> Remember me on this device</label>
+            <label class="check"><input type="checkbox" name="remember" /> Remember this workstation</label>
           </div>
-          <button class="btn btn--primary btn--block" type="submit">Log in</button>
+          <button class="btn btn--primary btn--block" type="submit">Authenticate</button>
         </form>
+
         <p class="auth__switch"><a href="#forgot" id="toggle-forgot">Forgot your password?</a></p>
+
         <div id="forgot-password-card" hidden class="auth__card auth__card--nested">
           <h2>Reset password</h2>
-          <p class="muted">Enter your email and we'll send you a password reset process instructions.</p>
+          <p class="muted">Enter your verified email to receive authorization reset instructions.</p>
           <form id="forgot-form">
             <div data-forgot-alert role="alert" hidden></div>
             <div class="field">
-              <label for="forgot-email">Email address</label>
-              <input class="input" id="forgot-email" name="email" type="email" autocomplete="email" required />
+              <label for="forgot-email">Email Address</label>
+              <input class="input" id="forgot-email" name="email" type="email" autocomplete="email" placeholder="name@domain.com" required />
             </div>
-            <button class="btn btn--secondary btn--block" type="submit">Send reset request</button>
+            <button class="btn btn--secondary btn--block" type="submit">Dispatch Reset Request</button>
           </form>
         </div>
-        <p class="auth__switch">New here? <a href="register.html">Create an account</a></p>
+
+        <p class="auth__switch">New to Arad Store? <a href="register.html">Initialize account</a></p>
       </div>
     </div>
-
   </main>
   <footer class="site-footer" id="site-footer"></footer>
 </body>

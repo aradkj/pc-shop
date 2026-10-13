@@ -346,7 +346,7 @@ export async function initPcBuilderPage() {
           content: html`
             <div class="modal__body">
               <p>All 8 core components have been added to your shopping cart with the authoritative <strong>5% Build Your Own PC discount</strong> applied.</p>
-              <div class="builder-summary__pricing" style="margin-top:1rem;background:var(--surface-2);padding:1rem;border-radius:var(--radius-sm);">
+              <div class="builder-summary__pricing builder-summary__pricing--modal">
                 <div class="builder-summary__pricing-row"><span>Build Subtotal:</span><span>${formatPrice(validationResult.subtotal)}</span></div>
                 <div class="builder-summary__pricing-row builder-summary__pricing-row--discount"><span>5% Build Discount:</span><span>-${formatPrice(validationResult.discount_amount)}</span></div>
                 <div class="builder-summary__pricing-row builder-summary__pricing-row--total"><span>Final Total:</span><span>${formatPrice(validationResult.total)}</span></div>
@@ -493,10 +493,10 @@ export async function initPcBuilderPage() {
             <span class="builder-step__icon">${icon(category.iconName)}</span>
             <div>
               <h2 class="builder-step__title">Step ${index + 1}: ${category.name}</h2>
-              <span class="text-muted" style="font-size:0.8rem;">${category.hint}</span>
+              <span class="text-muted builder-step__hint">${category.hint}</span>
             </div>
           </div>
-          <div style="display:flex;align-items:center;gap:0.75rem;">
+          <div class="builder-step__actions">
             ${selected
               ? html`<span class="badge badge--success builder-step__status-badge">Selected</span>`
               : html`<span class="badge builder-step__status-badge">Not selected</span>`}
@@ -528,7 +528,7 @@ export async function initPcBuilderPage() {
       <aside class="builder-summary" data-build-summary aria-label="Build Summary">
         <div class="builder-summary__header">
           <h2>Build Summary</h2>
-          <span class="badge ${isComplete ? "badge--success" : ""}" style="font-size:0.85rem;">
+          <span class="badge ${isComplete ? "badge--success" : ""} builder-summary__badge">
             ${selectedCount} of 8 components
           </span>
         </div>
@@ -572,7 +572,7 @@ export async function initPcBuilderPage() {
           ? html`
               <div class="builder-summary__issues" role="alert" data-validation-issues>
                 <strong>Compatibility Issues:</strong>
-                <ul style="margin:0.4rem 0 0;padding-left:1.2rem;">
+                <ul class="builder-summary__issue-list">
                   ${validationResult.issues.map((i) => html`<li>${i.message}</li>`)}
                 </ul>
               </div>`
@@ -581,7 +581,7 @@ export async function initPcBuilderPage() {
           ? html`
               <div class="builder-summary__warnings" role="status">
                 <strong>Recommendations &amp; Headroom:</strong>
-                <ul style="margin:0.4rem 0 0;padding-left:1.2rem;">
+                <ul class="builder-summary__warning-list">
                   ${validationResult.warnings.map((w) => html`<li>${w.message}</li>`)}
                 </ul>
               </div>`

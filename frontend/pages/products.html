@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shop · Arad Store</title>
-  <meta name="description" content="Search and filter PC components and gaming gear." />
+  <title>Hardware Catalogue · Arad Store</title>
+  <meta name="description" content="Browse, search and filter high-performance PC components, graphics hardware and processors." />
   <meta name="color-scheme" content="dark" />
-  <meta name="theme-color" content="#0a0c11" />
+  <meta name="theme-color" content="#090a0f" />
   <link rel="icon" href="../img/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="../css/style.css" />
   <link rel="stylesheet" href="../css/components.css" />
@@ -23,49 +23,58 @@
     <div class="container page">
       <header class="page-header">
         <div>
-          <h1>Shop</h1>
-          <p id="results-summary" aria-live="polite"></p>
+          <h1>Shop · Hardware Catalogue</h1>
+          <p id="results-summary" aria-live="polite">Loading hardware units…</p>
         </div>
       </header>
+
       <div class="shop-layout">
         <aside class="panel filters" aria-label="Filters">
+          <h2 class="panel__title">Filter Matrix</h2>
           <form id="filter-form">
             <div class="field">
-              <label for="filter-search">Search</label>
-              <input class="input" id="filter-search" name="search" type="search" maxlength="100" placeholder="e.g. RTX 4070" />
+              <label for="filter-search">Search Component</label>
+              <input class="input" id="filter-search" name="search" type="search" maxlength="100" placeholder="e.g. RTX 4070, Ryzen, DDR5" />
             </div>
+
             <div class="field">
-              <label for="filter-category">Category</label>
-              <select class="select" id="filter-category" name="category"><option value="">All categories</option></select>
+              <label for="filter-category">Architecture Category</label>
+              <select class="select" id="filter-category" name="category">
+                <option value="">All Categories</option>
+              </select>
             </div>
+
             <fieldset class="field">
-              <legend>Price (USD)</legend>
+              <legend>Price Envelope (USD)</legend>
               <div class="field-row">
                 <div>
                   <label class="visually-hidden" for="filter-min">Minimum price</label>
-                  <input class="input" id="filter-min" name="min_price" type="number" inputmode="decimal" min="0" step="1" placeholder="Min" />
+                  <input class="input" id="filter-min" name="min_price" type="number" inputmode="decimal" min="0" step="1" placeholder="Min $" />
                 </div>
                 <div>
                   <label class="visually-hidden" for="filter-max">Maximum price</label>
-                  <input class="input" id="filter-max" name="max_price" type="number" inputmode="decimal" min="0" step="1" placeholder="Max" />
+                  <input class="input" id="filter-max" name="max_price" type="number" inputmode="decimal" min="0" step="1" placeholder="Max $" />
                 </div>
               </div>
             </fieldset>
+
             <div class="field">
-              <label for="filter-sort">Sort by</label>
+              <label for="filter-sort">Sort Sequence</label>
               <select class="select" id="filter-sort" name="sort">
-                <option value="newest">Newest</option>
-                <option value="price_asc">Price: low to high</option>
-                <option value="price_desc">Price: high to low</option>
-                <option value="name">Name: A to Z</option>
+                <option value="newest">Newest Releases</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+                <option value="name">Model: A to Z</option>
               </select>
             </div>
+
             <div class="filters__actions">
               <button class="btn btn--primary" type="submit">Apply</button>
               <button class="btn btn--secondary" type="button" data-reset>Reset</button>
             </div>
           </form>
         </aside>
+
         <section aria-labelledby="results-heading">
           <h2 class="visually-hidden" id="results-heading">Products</h2>
           <div id="product-results"></div>

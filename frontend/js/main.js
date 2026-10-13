@@ -76,6 +76,12 @@ function renderHeader() {
     header,
     html`
       <a class="skip-link" href="#main">Skip to main content</a>
+      <div class="announcement-bar">
+        <div class="container announcement-bar__inner">
+          <span class="announcement-bar__badge">PROMO</span>
+          <span class="announcement-bar__text">Build a complete PC — 8 core parts — and get 5% off // Live stock telemetry</span>
+        </div>
+      </div>
       <div class="container site-header__inner">
         <a class="brand" href="${siteUrl("index.html")}" aria-label="Arad Store, home">
           ${LOGO}<span class="brand__name">ARAD<span>STORE</span></span>

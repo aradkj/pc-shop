@@ -11,6 +11,7 @@ import { isLoggedIn, logout, redirectToLogin } from "./auth.js";
 import { getCartCount, refreshCartBadge, setCartBadge } from "./cart.js";
 import { clearSession, getStoredUser, setStoredUser, takeFlash } from "./session.js";
 import { errorState, html, icon, mount, raw, siteUrl, toast, watchImages } from "./ui.js";
+import { initI18n, renderLanguageButton, t } from "./i18n.js";
 
 const PAGE = document.body.dataset.page;
 
@@ -38,20 +39,20 @@ const PAGES = {
 
 function navLinks(user) {
   const links = [
-    { key: "home", label: "Home", href: "index.html" },
-    { key: "products", label: "Shop", href: "pages/products.html" },
-    { key: "pc-builder", label: "Build Your PC", href: "pages/pc-builder.html" },
+    { key: "home", label: t("nav_home", "Home"), href: "index.html" },
+    { key: "products", label: t("nav_shop", "Shop"), href: "pages/products.html" },
+    { key: "pc-builder", label: t("nav_builder", "Build Your PC"), href: "pages/pc-builder.html" },
   ];
-  if (isLoggedIn()) links.push({ key: "orders", label: "My orders", href: "pages/orders.html" });
-  if (user?.role === "admin") links.push({ key: "admin", label: "Admin", href: "pages/admin.html" });
+  if (isLoggedIn()) links.push({ key: "orders", label: t("nav_orders", "My orders"), href: "pages/orders.html" });
+  if (user?.role === "admin") links.push({ key: "admin", label: t("nav_admin", "Admin"), href: "pages/admin.html" });
   return links;
 }
 
 function accountArea(user) {
   if (!isLoggedIn()) {
     return html`
-      <a class="btn btn--ghost btn--sm" href="${siteUrl("pages/login.html")}">Log in</a>
-      <a class="btn btn--primary btn--sm" href="${siteUrl("pages/register.html")}">Sign up</a>`;
+      <a class="btn btn--ghost btn--sm" href="${siteUrl("pages/login.html")}">${t("nav_login", "Log in")}</a>
+      <a class="btn btn--primary btn--sm" href="${siteUrl("pages/register.html")}">${t("nav_signup", "Sign up")}</a>`;
   }
   const name = user?.first_name ?? "Account";
   return html`
@@ -62,9 +63,9 @@ function accountArea(user) {
       </summary>
       <div class="user-menu__list">
         ${user ? html`<p class="user-menu__email">${user.email}</p>` : ""}
-        <a href="${siteUrl("pages/profile.html")}">My profile</a>
-        <a href="${siteUrl("pages/orders.html")}">My orders</a>
-        <button type="button" data-logout>Log out</button>
+        <a href="${siteUrl("pages/profile.html")}">${t("nav_profile", "My profile")}</a>
+        <a href="${siteUrl("pages/orders.html")}">${t("nav_orders", "My orders")}</a>
+        <button type="button" data-logout>${t("nav_logout", "Log out")}</button>
       </div>
     </details>`;
 }
@@ -75,11 +76,11 @@ function renderHeader() {
   mount(
     header,
     html`
-      <a class="skip-link" href="#main">Skip to main content</a>
+      <a class="skip-link" href="#main">${t("skip_link", "Skip to main content")}</a>
       <div class="announcement-bar">
         <div class="container announcement-bar__inner">
-          <span class="announcement-bar__badge">PROMO</span>
-          <span class="announcement-bar__text">Build a complete PC — 8 core parts — and get 5% off // Live stock telemetry</span>
+          <span class="announcement-bar__badge">${t("promo_badge", "PROMO")}</span>
+          <span class="announcement-bar__text">${t("promo_text", "Build a complete PC — 8 core parts — and get 5% off // Live stock telemetry")}</span>
         </div>
       </div>
       <div class="container site-header__inner">
@@ -96,6 +97,7 @@ function renderHeader() {
             )}
           </ul>
           <div class="site-nav__actions">
+            ${renderLanguageButton()}
             <a class="cart-link" href="${siteUrl("pages/cart.html")}" aria-label="Cart">
               ${icon("cart")}<span class="cart-link__count" data-cart-count hidden>0</span>
             </a>
@@ -118,7 +120,7 @@ function setMenuOpen(open) {
   toggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
 }
 
-/** Listeners on `document` are added once; they look the elements up when an event happens. */
+/** Listeners on \`document\` are added once; they look the elements up when an event happens. */
 function wireGlobalListeners() {
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
@@ -154,29 +156,29 @@ function renderFooter() {
       <div class="container site-footer__inner">
         <div>
           <a class="brand" href="${siteUrl("index.html")}" aria-label="Arad Store, home">${LOGO}<span class="brand__name">ARAD<span>STORE</span></span></a>
-          <p class="site-footer__blurb">PC components and gaming gear: graphics cards, processors, memory, storage and accessories.</p>
+          <p class="site-footer__blurb">${t("footer_blurb", "PC components and gaming gear: graphics cards, processors, memory, storage and accessories.")}</p>
         </div>
         <nav aria-label="Shop links">
-          <h2>Shop</h2>
+          <h2>${t("footer_shop_col", "Shop")}</h2>
           <ul>
-            <li><a href="${siteUrl("pages/products.html")}">All products</a></li>
-            <li><a href="${siteUrl("pages/pc-builder.html")}">Build Your PC</a></li>
-            <li><a href="${siteUrl("pages/cart.html")}">Cart</a></li>
-            <li><a href="${siteUrl("pages/orders.html")}">My orders</a></li>
+            <li><a href="${siteUrl("pages/products.html")}">${t("nav_shop", "All products")}</a></li>
+            <li><a href="${siteUrl("pages/pc-builder.html")}">${t("nav_builder", "Build Your PC")}</a></li>
+            <li><a href="${siteUrl("pages/cart.html")}">${t("nav_cart", "Cart")}</a></li>
+            <li><a href="${siteUrl("pages/orders.html")}">${t("nav_orders", "My orders")}</a></li>
           </ul>
         </nav>
         <nav aria-label="Account links">
-          <h2>Account</h2>
+          <h2>${t("footer_account_col", "Account")}</h2>
           <ul>
             ${isLoggedIn()
-              ? html`<li><a href="${siteUrl("pages/profile.html")}">My profile</a></li>`
-              : html`<li><a href="${siteUrl("pages/login.html")}">Log in</a></li>
-                  <li><a href="${siteUrl("pages/register.html")}">Create an account</a></li>`}
+              ? html`<li><a href="${siteUrl("pages/profile.html")}">${t("nav_profile", "My profile")}</a></li>`
+              : html`<li><a href="${siteUrl("pages/login.html")}">${t("nav_login", "Log in")}</a></li>
+                  <li><a href="${siteUrl("pages/register.html")}">${t("nav_signup", "Create an account")}</a></li>`}
           </ul>
         </nav>
       </div>
       <div class="container site-footer__legal">
-        \u00a9 ${new Date().getFullYear()} Arad Store \u00b7 A demo project: no payments are processed and nothing is shipped.
+        \u00a9 ${new Date().getFullYear()} Arad Store \u00b7 ${t("footer_legal", "A demo project: no payments are processed and nothing is shipped.")}
       </div>`,
   );
 }
@@ -212,6 +214,7 @@ async function ensureUserForHeader() {
 // ---------------------------------------------------------------------------
 
 async function start() {
+  initI18n();
   wireGlobalListeners();
   renderHeader();
   renderFooter();

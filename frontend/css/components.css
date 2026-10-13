@@ -2049,3 +2049,118 @@
   padding-left: 1.2rem;
 }
 
+/* ---------- Language Switcher Pop-up Trigger & Modal ---------- */
+
+.lang-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lang-btn:hover {
+  border-color: var(--border-highlight);
+  background: var(--surface-3);
+  color: #ffffff;
+}
+
+.lang-btn__icon {
+  width: 14px;
+  height: 14px;
+  color: var(--accent-text);
+}
+
+.lang-btn__badge {
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+}
+
+.lang-popup {
+  max-width: 440px;
+}
+
+.lang-popup__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-block: 0.5rem 1rem;
+}
+
+.lang-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.lang-option:hover {
+  border-color: var(--border-highlight);
+  background: var(--surface-2);
+}
+
+.lang-option.is-active {
+  border-color: var(--accent);
+  background: rgba(216, 20, 39, 0.08);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.lang-option__info {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.lang-option__flag {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.lang-option__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.lang-option__desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.lang-option__check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: transparent;
+  transition: all 0.15s ease;
+}
+
+.lang-option.is-active .lang-option__check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+

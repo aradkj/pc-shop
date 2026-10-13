@@ -949,3 +949,58 @@ pre,
   color: var(--text);
   font-weight: 600;
 }
+
+/* ---------- Bilingual & RTL Persian Support ---------- */
+
+[dir="rtl"] {
+  font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Sahel", Tahoma, sans-serif;
+  text-align: right;
+}
+
+[dir="rtl"] .brand__name {
+  letter-spacing: 0;
+}
+
+[dir="rtl"] .announcement-bar__inner {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .site-nav__links {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+[dir="rtl"] .site-nav__actions {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .product-card__meta,
+[dir="rtl"] .builder-card__meta {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .breadcrumb li+li::before {
+  content: "\\";
+  margin-right: 0;
+  margin-left: 0.5rem;
+}
+
+[dir="rtl"] .user-menu__list {
+  right: auto;
+  left: 0;
+  text-align: right;
+}
+
+[dir="rtl"] .field label {
+  text-align: right;
+}
+
+[dir="rtl"] .table th,
+[dir="rtl"] .table td {
+  text-align: right;
+}
+
+[dir="rtl"] .table .num {
+  text-align: left;
+}
+
